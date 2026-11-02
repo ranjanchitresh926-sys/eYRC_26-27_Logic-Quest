@@ -193,6 +193,68 @@ jobs:
                    "        dec_call(&block_hi, &block_lo);")
               assert old in s
               return s.replace(old,new,1)
+          def step_split(s):
+              helper="""static uint8_t next_node(uint8_t cur, uint8_t dst) {
+              uint8_t (* volatile pick)(uint8_t,uint8_t) = route_slot;
+              uint16_t (* volatile edge)(uint8_t,uint8_t) = get_edge;
+              uint16_t e = edge(cur, pick(cur, dst));
+              return (uint8_t)(e & 63u);
+          }
+          static uint8_t plan_path(uint8_t start, uint8_t end, uint8_t path[40]) {
+              uint8_t len = 1;
+              uint8_t (* volatile next)(uint8_t,uint8_t) = next_node;
+              if (start < 1u || start > 36u || end < 1u || end > 36u) return 0;
+              path[0] = start;
+              while (path[len - 1u] != end && len < 36u) {
+                  uint8_t n = next(path[len - 1u], end);
+                  if (!n) return 0;
+                  path[len++] = n;
+              }
+              return path[len - 1u] == end ? len : 0;
+          }
+          """
+              start=s.index("static uint8_t plan_path(")
+              end=s.index("\\n// ##############################################",start)
+              return s[:start]+helper+s[end:]
+          def decrypt_split(s):
+              old="""static void present_decrypt(uint32_t *hi, uint32_t *lo) {
+              uint32_t kh = PRESENT_KEY_HI, km = PRESENT_KEY_MID;
+              uint16_t kl = PRESENT_KEY_LO;
+              uint8_t r;
+              for (r = 1; r <= 31; ++r) key_next(&kh, &km, &kl, r);
+              *hi ^= kh;
+              *lo ^= km;
+              for (r = 31; r > 0; --r) {
+                  key_prev(&kh, &km, &kl, r);
+                  inv_perm(hi, lo);
+                  *hi = pisbox_word(*hi);
+                  *lo = pisbox_word(*lo);
+                  *hi ^= kh;
+                  *lo ^= km;
+              }
+          }"""
+              new="""static void present_decrypt(uint32_t *hi, uint32_t *lo) {
+              uint32_t kh = PRESENT_KEY_HI, km = PRESENT_KEY_MID;
+              uint16_t kl = PRESENT_KEY_LO;
+              uint8_t r;
+              void (* volatile kn)(uint32_t *,uint32_t *,uint16_t *,uint8_t) = key_next;
+              void (* volatile kp)(uint32_t *,uint32_t *,uint16_t *,uint8_t) = key_prev;
+              void (* volatile ip)(uint32_t *,uint32_t *) = inv_perm;
+              uint32_t (* volatile isw)(uint32_t) = pisbox_word;
+              for (r = 1; r <= 31; ++r) kn(&kh, &km, &kl, r);
+              *hi ^= kh;
+              *lo ^= km;
+              for (r = 31; r > 0; --r) {
+                  kp(&kh, &km, &kl, r);
+                  ip(hi, lo);
+                  *hi = isw(*hi);
+                  *lo = isw(*lo);
+                  *hi ^= kh;
+                  *lo ^= km;
+              }
+          }"""
+              assert old in s
+              return s.replace(old,new,1)
           variants={
               "base":base,
               "route_indirect":route_indirect(base),
@@ -200,9 +262,11 @@ jobs:
               "route_and_path":path_indirect(route_indirect(base)),
               "route_and_dec":decrypt_indirect(route_indirect(base)),
               "all_three":decrypt_indirect(path_indirect(route_indirect(base))),
-              "edge_indirect":edge_indirect(base),
-              "edge_and_path":path_indirect(edge_indirect(base)),
               "edge_route_dec":decrypt_indirect(path_indirect(edge_indirect(base))),
+              "step_split":path_indirect(step_split(base)),
+              "step_split_dec":decrypt_indirect(path_indirect(step_split(base))),
+              "step_split_dec_inner":decrypt_indirect(path_indirect(decrypt_split(step_split(base)))),
+              "step_split_inner":path_indirect(decrypt_split(step_split(base))),
           }
           droot=Path("/tmp/stack_profile"); droot.mkdir(exist_ok=True)
           for name,src in variants.items():
