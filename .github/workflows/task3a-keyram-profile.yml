@@ -27,11 +27,6 @@ jobs:
           import subprocess,re
           p=Path("Path_Planner_Dec.c")
           base=p.read_text()
-          a=base.index("static void key_next(")
-          b=base.index("static uint32_t pisbox_word(",a)
-          key=base[a:b]
-          key=key.replace("static void key_next(uint32_t *kh, uint32_t *km, uint16_t *kl, uint8_t r)","static void key_next(volatile uint32_t *kh, volatile uint32_t *km, volatile uint16_t *kl, uint8_t r)")
-          key=key.replace("static void key_prev(uint32_t *kh, uint32_t *km, uint16_t *kl, uint8_t r)","static void key_prev(volatile uint32_t *kh, volatile uint32_t *km, volatile uint16_t *kl, uint8_t r)")
           a=base.index("static void present_decrypt(")
           b=base.index("static uint16_t select_edge(",a)
           dec=base[a:b]
