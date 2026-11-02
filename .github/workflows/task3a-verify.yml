@@ -1,0 +1,39 @@
+name: Task 3A verification
+on:
+  push:
+    branches:
+      - task-3a-solution
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out solution branch
+        uses: actions/checkout@v4
+        with:
+          ref: task-3a-solution
+      - name: Run official host test suite
+        working-directory: Task_3/Task_3A/code/c_programs
+        run: |
+          gcc --version
+          bash test.sh
+      - name: Install RISC-V compiler and Picolibc
+        run: |
+          sudo apt-get update
+          apt-cache search picolibc
+          sudo apt-get install -y gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf picolibc-riscv64-unknown-elf
+      - name: Build with official generatehex script
+        working-directory: Task_3/Task_3A/code/c_programs
+        run: |
+          command -v riscv64-unknown-elf-gcc
+          find /usr -name picolibc.specs -o -name picolibc.ld 2>/dev/null | head -20
+          bash generatehex.sh
+          test -s ../program.hex
+          test -s ../program.lss
+          wc -c ../program.hex ../program.lss
+      - name: Upload generated Task 3A artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: task3a-riscv-build
+          path: |
+            Task_3/Task_3A/code/program.hex
+            Task_3/Task_3A/code/program.lss
