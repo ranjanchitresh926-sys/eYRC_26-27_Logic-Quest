@@ -426,32 +426,34 @@ static uint16_t get_edge(uint8_t n, uint8_t k) {
     }
     return 0;
 }
-static uint8_t shortest_path(uint8_t start, uint8_t end, uint8_t path[40], uint16_t dist[36]) {
+static uint8_t shortest_path(uint8_t start, uint8_t end, uint8_t path[40], uint8_t dist[36]) {
     uint8_t i, j, k, u, cur, found;
-    uint16_t best, d, e, v, nd;
-    for (i = 0; i < 36; ++i) dist[i] = 0x7FFFu;
+    uint8_t best, d, e, v;
+    uint16_t nd;
+    for (i = 0; i < 36; ++i) dist[i] = 255u;
+    for (i = 0; i < 5; ++i) path[i] = 0;
     dist[start - 1u] = 0;
     for (i = 0; i < 36; ++i) {
-        best = 0x7FFFu;
+        best = 255u;
         u = 0;
         for (j = 0; j < 36; ++j) {
-            d = dist[j];
-            if (!(d & 0x8000u) && d < best) {
-                best = d;
+            if (!(path[j >> 3] & (uint8_t)(1u << (j & 7u))) && dist[j] < best) {
+                best = dist[j];
                 u = (uint8_t)(j + 1u);
             }
         }
         if (u == 0) break;
-        dist[u - 1u] = (uint16_t)(best | 0x8000u);
+        path[(u - 1u) >> 3] |= (uint8_t)(1u << ((u - 1u) & 7u));
         if (u == end) break;
         for (k = 0; k < 4; ++k) {
-            e = get_edge(u, k);
-            if (e) {
-                v = e & 63u;
-                d = dist[v - 1u];
-                if (!(d & 0x8000u)) {
-                    nd = (uint16_t)(best + (e >> 6));
-                    if (nd < d) dist[v - 1u] = nd;
+            uint16_t edge = get_edge(u, k);
+            if (edge) {
+                v = (uint8_t)(edge & 63u);
+                e = (uint8_t)(edge >> 6);
+                if (!(path[(v - 1u) >> 3] & (uint8_t)(1u << ((v - 1u) & 7u)))) {
+                    nd = (uint16_t)best + e;
+                    d = dist[v - 1u];
+                    if (nd < d) dist[v - 1u] = (uint8_t)nd;
                 }
             }
         }
@@ -461,15 +463,15 @@ static uint8_t shortest_path(uint8_t start, uint8_t end, uint8_t path[40], uint1
     path[i++] = cur;
     while (cur != start && i < 40u) {
         found = 0;
-        best = (uint16_t)(dist[cur - 1u] & 0x7FFFu);
+        best = dist[cur - 1u];
         for (k = 0; k < 4; ++k) {
-            e = get_edge(cur, k);
-            if (e) {
-                v = e & 63u;
-                d = (uint16_t)(dist[v - 1u] & 0x7FFFu);
-                nd = (uint16_t)(d + (e >> 6));
+            uint16_t edge = get_edge(cur, k);
+            if (edge) {
+                v = (uint8_t)(edge & 63u);
+                d = dist[v - 1u];
+                nd = (uint16_t)d + (edge >> 6);
                 if (nd == best) {
-                    cur = (uint8_t)v;
+                    cur = v;
                     path[i++] = cur;
                     found = 1;
                     break;
@@ -488,7 +490,6 @@ static uint8_t shortest_path(uint8_t start, uint8_t end, uint8_t path[40], uint1
     }
     return i;
 }
-
 // ##############################################
 
 // main function
@@ -562,9 +563,9 @@ int main(int argc, char const *argv[]) {
 
     // prefer declaring variables like this
     #ifdef __linux__
-        uint16_t dist[36];
+        uint8_t dist[36];
     #else
-        uint16_t *dist = (uint16_t *) 0x02000020;
+        uint8_t *dist = (uint8_t *) 0x02000020;
     #endif
 
     if (is_encrypted) {
