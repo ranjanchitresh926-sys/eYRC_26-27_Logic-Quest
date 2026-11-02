@@ -119,6 +119,7 @@ jobs:
 
       - name: Package exact portal folder structure
         run: |
+          rm -f Task_3/Task_3A/code/.temp.file.*
           mkdir -p "$RUNNER_TEMP/package"
           mkdir -p "$RUNNER_TEMP/package/lq_1137_task3a"
           cp -a Task_3/Task_3A/code "$RUNNER_TEMP/package/lq_1137_task3a/"
