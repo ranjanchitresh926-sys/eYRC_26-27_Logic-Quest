@@ -202,7 +202,7 @@ jobs:
                   if(cost!=d[s][t]) return 3;
                   pairs++;
               }
-              printf("PASS %u all-pairs routes"+(int)0+"\\n",pairs);
+              printf("PASS %u all-pairs routes",pairs); putchar(10);
               return 0;
           }
           EOF
@@ -218,8 +218,10 @@ jobs:
           bash generatehex.sh
           test -s ../program.hex
           test -s ../program.lss
-          riscv64-unknown-elf-size -B --common ../.temp.file.elf
-          riscv64-unknown-elf-objdump -h ../.temp.file.elf > /tmp/sections.txt
+          riscv64-unknown-elf-gcc -march=rv32i -mabi=ilp32 --specs=picolibc.specs -Os -g3 -flto -DPICOLIBC_INTEGER_PRINTF_SCANF -Wall -c Path_Planner_Dec.c -o /tmp/audit.o
+          riscv64-unknown-elf-gcc -march=rv32i -mabi=ilp32 --specs=picolibc.specs -Os -g3 -flto -DPICOLIBC_INTEGER_PRINTF_SCANF -Wl,--gc-sections,--defsym=__flash=0x00000000,--defsym=__flash_size=4096 --crt0=minimal -Wl,--defsym=__ram=0x02000000,--defsym=__ram_size=512,--defsym=__stack_size=184 -Tpicolibc.ld -o /tmp/audit.elf /tmp/audit.o
+          riscv64-unknown-elf-size -B --common /tmp/audit.elf
+          riscv64-unknown-elf-objdump -h /tmp/audit.elf > /tmp/sections.txt
           python3 - <<'PY'
           from pathlib import Path
           import re
