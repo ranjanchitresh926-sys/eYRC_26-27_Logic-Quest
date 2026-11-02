@@ -1,0 +1,75 @@
+name: Task 3A final verification
+permissions:
+  contents: read
+on:
+  push:
+    branches:
+      - task-3a-solution
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: task-3a-solution
+      - name: Run host tests
+        working-directory: Task_3/Task_3A/code/c_programs
+        run: |
+          set -euo pipefail
+          bash -n c_simulator.sh encrypt.sh test.sh generatehex.sh
+          bash test.sh
+      - name: Build RV32I program
+        working-directory: Task_3/Task_3A/code/c_programs
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf picolibc-riscv64-unknown-elf
+          rm -f ../program.hex ../program.lss
+          bash generatehex.sh
+          test -s ../program.hex
+          test -s ../program.lss
+          riscv64-unknown-elf-size -B --common ../.temp.file.elf || true
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          rows=Path("../program.hex").read_text().splitlines()
+          assert rows[0].strip()=="@00000000"
+          assert len(rows)==257, len(rows)
+          words=[w for row in rows[1:] for w in row.split()]
+          assert len(words)==1024, len(words)
+          assert all(re.fullmatch(r"[0-9A-Fa-f]{8}",w) for w in words)
+          listing=Path("../program.lss").read_text()
+          for op in ("mul","mulh","div","divu","rem","remu"):
+              assert not re.search(r"\\b"+op+r"\\b",listing), op
+          print("Verified 1024 words in the 4 KiB ROM image")
+          PY
+      - name: Package submission
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/release/lq_1137_task3a
+          cp -a Task_3/Task_3A/code /tmp/release/lq_1137_task3a/code
+          cd /tmp/release
+          zip -qr /tmp/lq_1137_task3a.zip lq_1137_task3a
+          zip -T /tmp/lq_1137_task3a.zip
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          z=ZipFile("/tmp/lq_1137_task3a.zip")
+          names=set(z.namelist())
+          required=[
+            "lq_1137_task3a/code/program.hex",
+            "lq_1137_task3a/code/program.lss",
+            "lq_1137_task3a/code/c_programs/Path_Planner_Dec.c",
+            "lq_1137_task3a/code/c_programs/c_simulator.sh",
+            "lq_1137_task3a/code/c_programs/encrypt.sh",
+            "lq_1137_task3a/code/c_programs/test.sh",
+            "lq_1137_task3a/code/c_programs/generatehex.sh",
+          ]
+          assert not [x for x in required if x not in names]
+          assert len(names)==10, sorted(names)
+          print("Verified submission folder and all required files")
+          print("\\n".join(sorted(names)))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lq_1137_task3a
+          path: /tmp/lq_1137_task3a.zip
