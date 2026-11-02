@@ -36,7 +36,8 @@ jobs:
         run: |
           gcc -std=c11 -O2 Path_Planner_Dec.c -o "$RUNNER_TEMP/task3a-host"
           python3 - <<'PY'
-          import subprocess
+          import os, subprocess
+          host = os.path.join(os.environ['RUNNER_TEMP'], 'task3a-host')
           n = 36
           edges = [
               (1,36,100),(1,5,5),(1,4,15),(1,6,15),(2,4,5),(3,6,5),
@@ -60,7 +61,7 @@ jobs:
           for s in range(1,n+1):
               for t in range(1,n+1):
                   p = subprocess.run(
-                      ["$RUNNER_TEMP/task3a-host", str(s), str(t), "0"],
+                      [host, str(s), str(t), "0"],
                       text=True, capture_output=True, timeout=2
                   )
                   assert p.returncode == 0, (s,t,p.returncode,p.stdout,p.stderr)
