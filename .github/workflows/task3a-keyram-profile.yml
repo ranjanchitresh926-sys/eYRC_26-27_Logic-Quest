@@ -82,7 +82,7 @@ jobs:
               for i,line in enumerate(dis.splitlines()):
                   if any(line.endswith("<"+n+">:") for n in ("main","present_decrypt","decrypt_round")):
                       for zline in dis.splitlines()[i+1:i+15]:
-                          m=re.search(r"addi\\s+x2,x2,(-?\\d+)",zline)
+                          m=re.search(r"addi\s+x2,x2,(-?\d+)",zline)
                           if m:
                               frames.append((line.strip(),-int(m.group(1)))); break
               print(name,"SIZE",size,"FRAMES",frames)
