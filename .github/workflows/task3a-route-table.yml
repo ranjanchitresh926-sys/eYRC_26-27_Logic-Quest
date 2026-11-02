@@ -183,7 +183,8 @@ jobs:
               assert old in s
               return s.replace(old,new,1)
           def edge_indirect(s):
-              s=s.replace("    uint8_t cur = start, len = 1;","    uint8_t cur = start, len = 1;"+chr(10)+"    uint16_t (* volatile edge_call)(uint8_t,uint8_t) = get_edge;",1)
+              s=route_indirect(s)
+              s=s.replace("    uint8_t (* volatile pick)(uint8_t,uint8_t) = route_slot;","    uint8_t (* volatile pick)(uint8_t,uint8_t) = route_slot;"+chr(10)+"    uint16_t (* volatile edge_call)(uint8_t,uint8_t) = get_edge;",1)
               s=s.replace("get_edge(cur, pick(cur, end))","edge_call(cur, pick(cur, end))",1)
               return s
           def decrypt_indirect(s):
