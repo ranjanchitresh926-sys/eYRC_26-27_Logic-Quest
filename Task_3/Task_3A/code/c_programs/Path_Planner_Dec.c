@@ -283,6 +283,7 @@ static uint16_t select_edge(uint8_t k, uint16_t a, uint16_t b, uint16_t c, uint1
 }
 static uint16_t get_edge(uint8_t n, uint8_t k) {
     if (n == 0u || n > 36u) return 0;
+    if (n == 20u) return select_edge(k, 0x0155u, 0x02C8u, 0x02DBu, 0x0000u);
     if (n <= 18u) {
         if (n <= 9u) {
             if (n <= 5u) {
@@ -426,69 +427,238 @@ static uint16_t get_edge(uint8_t n, uint8_t k) {
     }
     return 0;
 }
-static uint8_t shortest_path(uint8_t start, uint8_t end, uint8_t path[40], uint8_t dist[36]) {
-    uint8_t i, j, k, u, cur, found;
-    uint8_t best, d, e, v;
-    uint16_t nd;
-    for (i = 0; i < 36; ++i) dist[i] = 255u;
-    for (i = 0; i < 5; ++i) path[i] = 0;
-    dist[start - 1u] = 0;
-    for (i = 0; i < 36; ++i) {
-        best = 255u;
-        u = 0;
-        for (j = 0; j < 36; ++j) {
-            if (!(path[j >> 3] & (uint8_t)(1u << (j & 7u))) && dist[j] < best) {
-                best = dist[j];
-                u = (uint8_t)(j + 1u);
+static uint8_t route_slot(uint8_t src, uint8_t dst) {
+    uint32_t a, b, c, row;
+    uint8_t i = (uint8_t)(dst - 1u);
+        if (src <= 18u) {
+            if (src <= 9u) {
+                if (src <= 5u) {
+                    if (src <= 3u) {
+                        if (src <= 2u) {
+                            if (src <= 1u) {
+                                a = 0x5A555DB8u;
+                                b = 0x59555555u;
+                                c = 0x00000026u;
+                            } else {
+                                a = 0x00000000u;
+                                b = 0x00000000u;
+                                c = 0x00000000u;
+                            }
+                        } else {
+                            a = 0x00000000u;
+                            b = 0x00000000u;
+                            c = 0x00000000u;
+                        }
+                    } else {
+                        if (src <= 4u) {
+                            a = 0x6A555511u;
+                            b = 0x69955555u;
+                            c = 0x0000006Au;
+                        } else {
+                            a = 0x95A69000u;
+                            b = 0xA6AAAAAAu;
+                            c = 0x00000019u;
+                        }
+                    }
+                } else {
+                    if (src <= 7u) {
+                        if (src <= 6u) {
+                            a = 0x55555145u;
+                            b = 0x55555555u;
+                            c = 0x00000055u;
+                        } else {
+                            a = 0x2A040000u;
+                            b = 0x28000000u;
+                            c = 0x0000002Au;
+                        }
+                    } else {
+                        if (src <= 8u) {
+                            a = 0x80510000u;
+                            b = 0xA2AAAA96u;
+                            c = 0x00000028u;
+                        } else {
+                            a = 0x00400000u;
+                            b = 0x00000000u;
+                            c = 0x00000000u;
+                        }
+                    }
+                }
+            } else {
+                if (src <= 14u) {
+                    if (src <= 12u) {
+                        if (src <= 11u) {
+                            if (src <= 10u) {
+                                a = 0x00000000u;
+                                b = 0x00000000u;
+                                c = 0x00000000u;
+                            } else {
+                                a = 0x00410000u;
+                                b = 0x00000028u;
+                                c = 0x00000000u;
+                            }
+                        } else {
+                            a = 0x00000000u;
+                            b = 0x00000000u;
+                            c = 0x00000000u;
+                        }
+                    } else {
+                        if (src <= 13u) {
+                            a = 0x00000000u;
+                            b = 0x54400000u;
+                            c = 0x00000015u;
+                        } else {
+                            a = 0x505559AAu;
+                            b = 0x41155555u;
+                            c = 0x00000080u;
+                        }
+                    }
+                } else {
+                    if (src <= 16u) {
+                        if (src <= 15u) {
+                            a = 0x40555511u;
+                            b = 0x41155555u;
+                            c = 0x00000040u;
+                        } else {
+                            a = 0x15555555u;
+                            b = 0x55555554u;
+                            c = 0x00000055u;
+                        }
+                    } else {
+                        if (src <= 17u) {
+                            a = 0x00000000u;
+                            b = 0x00000000u;
+                            c = 0x00000000u;
+                        } else {
+                            a = 0x00000000u;
+                            b = 0x00000000u;
+                            c = 0x00000000u;
+                        }
+                    }
+                }
             }
-        }
-        if (u == 0) break;
-        path[(u - 1u) >> 3] |= (uint8_t)(1u << ((u - 1u) & 7u));
-        if (u == end) break;
-        for (k = 0; k < 4; ++k) {
-            uint16_t edge = get_edge(u, k);
-            if (edge) {
-                v = (uint8_t)(edge & 63u);
-                e = (uint8_t)(edge >> 6);
-                if (!(path[(v - 1u) >> 3] & (uint8_t)(1u << ((v - 1u) & 7u)))) {
-                    nd = (uint16_t)best + e;
-                    d = dist[v - 1u];
-                    if (nd < d) dist[v - 1u] = (uint8_t)nd;
+        } else {
+            if (src <= 27u) {
+                if (src <= 23u) {
+                    if (src <= 21u) {
+                        if (src <= 20u) {
+                            if (src <= 19u) {
+                                a = 0x55555555u;
+                                b = 0x55555541u;
+                                c = 0x00000055u;
+                            } else {
+                                a = 0x95555555u;
+                                b = 0xA6AAA816u;
+                                c = 0x00000069u;
+                            }
+                        } else {
+                            a = 0x00000000u;
+                            b = 0x00000000u;
+                            c = 0x00000000u;
+                        }
+                    } else {
+                        if (src <= 22u) {
+                            a = 0x00000000u;
+                            b = 0x00000000u;
+                            c = 0x00000000u;
+                        } else {
+                            a = 0x2AAAAAAAu;
+                            b = 0xAAA986A8u;
+                            c = 0x000000AAu;
+                        }
+                    }
+                } else {
+                    if (src <= 25u) {
+                        if (src <= 24u) {
+                            a = 0x00000000u;
+                            b = 0x00000000u;
+                            c = 0x00000000u;
+                        } else {
+                            a = 0x55555555u;
+                            b = 0x55545155u;
+                            c = 0x00000055u;
+                        }
+                    } else {
+                        if (src <= 26u) {
+                            a = 0x15555555u;
+                            b = 0x55504154u;
+                            c = 0x00000055u;
+                        } else {
+                            a = 0x95555555u;
+                            b = 0xAA8A2956u;
+                            c = 0x0000006Au;
+                        }
+                    }
+                }
+            } else {
+                if (src <= 32u) {
+                    if (src <= 30u) {
+                        if (src <= 29u) {
+                            if (src <= 28u) {
+                                a = 0x40555511u;
+                                b = 0x41155555u;
+                                c = 0x00000040u;
+                            } else {
+                                a = 0x15555555u;
+                                b = 0xA8904154u;
+                                c = 0x0000006Au;
+                            }
+                        } else {
+                            a = 0x95555555u;
+                            b = 0xA2AAA956u;
+                            c = 0x00000068u;
+                        }
+                    } else {
+                        if (src <= 31u) {
+                            a = 0x2A082088u;
+                            b = 0x08000000u;
+                            c = 0x00000026u;
+                        } else {
+                            a = 0x01000000u;
+                            b = 0x14400000u;
+                            c = 0x00000015u;
+                        }
+                    }
+                } else {
+                    if (src <= 34u) {
+                        if (src <= 33u) {
+                            a = 0x00000000u;
+                            b = 0x00000000u;
+                            c = 0x00000000u;
+                        } else {
+                            a = 0x00000000u;
+                            b = 0x00000000u;
+                            c = 0x00000000u;
+                        }
+                    } else {
+                        if (src <= 35u) {
+                            a = 0x40514000u;
+                            b = 0x51555555u;
+                            c = 0x00000004u;
+                        } else {
+                            a = 0x00000000u;
+                            b = 0x00000000u;
+                            c = 0x00000000u;
+                        }
+                    }
                 }
             }
         }
+    if (i < 16u) row = a;
+    else if (i < 32u) row = b;
+    else row = c;
+    return (uint8_t)((row >> ((i & 15u) << 1)) & 3u);
+}
+static uint8_t plan_path(uint8_t start, uint8_t end, uint8_t path[40]) {
+    uint8_t cur = start, len = 1;
+    if (start < 1u || start > 36u || end < 1u || end > 36u) return 0;
+    path[0] = start;
+    while (cur != end && len < 36u) {
+        uint16_t e = get_edge(cur, route_slot(cur, end));
+        if (!e) return 0;
+        cur = (uint8_t)(e & 63u);
+        path[len++] = cur;
     }
-    cur = end;
-    i = 0;
-    path[i++] = cur;
-    while (cur != start && i < 40u) {
-        found = 0;
-        best = dist[cur - 1u];
-        for (k = 0; k < 4; ++k) {
-            uint16_t edge = get_edge(cur, k);
-            if (edge) {
-                v = (uint8_t)(edge & 63u);
-                d = dist[v - 1u];
-                nd = (uint16_t)d + (edge >> 6);
-                if (nd == best) {
-                    cur = v;
-                    path[i++] = cur;
-                    found = 1;
-                    break;
-                }
-            }
-        }
-        if (!found) {
-            path[0] = start;
-            return 1;
-        }
-    }
-    for (j = 0; j < (i >> 1); ++j) {
-        uint8_t t = path[j];
-        path[j] = path[i - 1u - j];
-        path[i - 1u - j] = t;
-    }
-    return i;
+    return cur == end ? len : 0;
 }
 
 // ##############################################
@@ -561,12 +731,6 @@ int main(int argc, char const *argv[]) {
     uint8_t end_point   = 0;              // where the bot goes
 
     // ############# Add your code here #############
-#ifdef __linux__
-    uint8_t dist[36];
-#else
-    uint8_t *dist = (uint8_t *)0x02000020u;
-#endif
-
     if (start_point < 1u || start_point > 36u) return 1;
 
     if (is_encrypted) {
@@ -596,7 +760,7 @@ int main(int argc, char const *argv[]) {
         if (end_point < 1u || end_point > 36u) return 1;
     }
 
-    idx = shortest_path(start_point, end_point, path_planned, dist);
+    idx = plan_path(start_point, end_point, path_planned);
     if (!idx) return 1;
 
     // ##############################################
