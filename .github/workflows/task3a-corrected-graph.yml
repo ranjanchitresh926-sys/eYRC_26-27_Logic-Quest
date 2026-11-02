@@ -98,18 +98,18 @@ jobs:
           riscv64-unknown-elf-objdump -h .temp.file.elf | tee "$RUNNER_TEMP/task3a-sections.log"
           riscv64-unknown-elf-objdump -d .temp.file.elf > "$RUNNER_TEMP/task3a-disassembly.txt"
           python3 - <<'PY'
-          import re
+          import os, re
           from pathlib import Path
           p = Path("program.hex").read_text().splitlines()
           assert p and p[0].strip() == "@00000000", (p[:2])
           words = [w for line in p[1:] for w in line.split()]
           assert len(words) == 1024, f"expected 1024 words, got {len(words)}"
           assert all(re.fullmatch(r"[0-9A-Fa-f]{8}", w) for w in words), "malformed HEX word"
-          size = Path("$RUNNER_TEMP/task3a-size.log").read_text().splitlines()
+          size = Path(os.path.join(os.environ["RUNNER_TEMP"], "task3a-size.log")).read_text().splitlines()
           fields = size[-1].split()
           text_size, data_size, bss_size = map(int, fields[:3])
           assert text_size < 4096, f"instruction memory overflow: {text_size}"
-          dis = Path("$RUNNER_TEMP/task3a-disassembly.txt").read_text()
+          dis = Path(os.path.join(os.environ["RUNNER_TEMP"], "task3a-disassembly.txt")).read_text()
           pat = re.compile(r"^\s*[0-9a-fA-F]+:\s+[0-9a-fA-F]+\s+(mul|mulh|mulhsu|mulhu|div|divu|rem|remu)(?:\s|$)", re.M)
           bad = pat.findall(dis)
           assert not bad, f"RV32M instructions present: {bad[:5]}"
