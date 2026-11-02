@@ -182,6 +182,10 @@ jobs:
                    "    idx = plan_call(start_point, end_point, path_planned);")
               assert old in s
               return s.replace(old,new,1)
+          def edge_indirect(s):
+              s=s.replace("    uint8_t cur = start, len = 1;","    uint8_t cur = start, len = 1;"+chr(10)+"    uint16_t (* volatile edge_call)(uint8_t,uint8_t) = get_edge;",1)
+              s=s.replace("get_edge(cur, pick(cur, end))","edge_call(cur, pick(cur, end))",1)
+              return s
           def decrypt_indirect(s):
               old="present_decrypt(&block_hi, &block_lo);"
               new=("void (* volatile dec_call)(uint32_t *,uint32_t *) = present_decrypt;"+chr(10)+
@@ -195,6 +199,9 @@ jobs:
               "route_and_path":path_indirect(route_indirect(base)),
               "route_and_dec":decrypt_indirect(route_indirect(base)),
               "all_three":decrypt_indirect(path_indirect(route_indirect(base))),
+              "edge_indirect":edge_indirect(base),
+              "edge_and_path":path_indirect(edge_indirect(base)),
+              "edge_route_dec":decrypt_indirect(path_indirect(edge_indirect(base))),
           }
           droot=Path("/tmp/stack_profile"); droot.mkdir(exist_ok=True)
           for name,src in variants.items():
