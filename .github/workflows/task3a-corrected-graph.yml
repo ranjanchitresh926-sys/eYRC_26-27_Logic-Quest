@@ -1,0 +1,124 @@
+name: Task 3A corrected-graph final verification
+
+on:
+  push:
+    branches:
+      - task3a-corrected-graph
+    paths:
+      - 'Task_3/Task_3A/code/c_programs/Path_Planner_Dec.c'
+      - '.github/workflows/task3a-corrected-graph.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-package:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install official RISC-V toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf picolibc-riscv64-unknown-elf
+
+      - name: Run official fixed test suite
+        working-directory: Task_3/Task_3A/code/c_programs
+        run: |
+          bash -n c_simulator.sh encrypt.sh test.sh generatehex.sh
+          bash test.sh | tee "$RUNNER_TEMP/task3a-fixed-tests.log"
+          grep -q '8/8 cases passed' "$RUNNER_TEMP/task3a-fixed-tests.log"
+
+      - name: Independently audit every ordered route
+        working-directory: Task_3/Task_3A/code/c_programs
+        run: |
+          gcc -std=c11 -O2 Path_Planner_Dec.c -o "$RUNNER_TEMP/task3a-host"
+          python3 - <<'PY'
+          import subprocess
+          n = 36
+          edges = [
+              (1,36,100),(1,5,5),(1,4,15),(1,6,15),(2,4,5),(3,6,5),
+              (4,14,15),(5,7,11),(5,8,11),(6,20,15),(7,10,5),(7,15,11),
+              (8,11,5),(8,20,11),(9,11,7),(9,12,5),(11,19,7),(13,14,5),
+              (13,30,19),(14,15,5),(16,17,5),(16,23,7),(18,19,5),(20,21,5),
+              (20,27,11),(22,25,5),(23,25,7),(23,26,5),(24,27,5),(26,29,11),
+              (27,29,11),(28,31,5),(28,32,15),(29,32,5),(30,33,5),(30,35,19),
+              (31,34,5),(31,35,19)
+          ]
+          inf = 10**9
+          d = [[inf]*(n+1) for _ in range(n+1)]
+          for i in range(1,n+1): d[i][i] = 0
+          for u,v,w in edges: d[u][v] = d[v][u] = w
+          for k in range(1,n+1):
+              for i in range(1,n+1):
+                  for j in range(1,n+1):
+                      if d[i][k] + d[k][j] < d[i][j]:
+                          d[i][j] = d[i][k] + d[k][j]
+          max_nodes = 0
+          for s in range(1,n+1):
+              for t in range(1,n+1):
+                  p = subprocess.run(
+                      ["$RUNNER_TEMP/task3a-host", str(s), str(t), "0"],
+                      text=True, capture_output=True, timeout=2
+                  )
+                  assert p.returncode == 0, (s,t,p.returncode,p.stdout,p.stderr)
+                  route = list(map(int,p.stdout.split()))
+                  assert route and route[0] == s and route[-1] == t, (s,t,route)
+                  assert len(route) <= 13, (s,t,route)
+                  cost = 0
+                  for u,v in zip(route,route[1:]):
+                      w = next((w for a,b,w in edges if (a==u and b==v) or (a==v and b==u)),None)
+                      assert w is not None, (s,t,route,u,v)
+                      cost += w
+                  assert cost == d[s][t], (s,t,route,cost,d[s][t])
+                  max_nodes = max(max_nodes,len(route))
+          print(f"PASS: {n*n} ordered shortest paths; {len(edges)} arena edges; max path {max_nodes} nodes")
+          PY
+
+      - name: Build RV32I image with official generatehex script
+        working-directory: Task_3/Task_3A/code/c_programs
+        run: |
+          cp generatehex.sh generatehex_keep_elf.sh
+          sed -i '/^rm -f \.temp\.file\.\*/d' generatehex_keep_elf.sh
+          bash generatehex_keep_elf.sh | tee "$RUNNER_TEMP/task3a-riscv-build.log"
+          grep -q 'successfully generated' "$RUNNER_TEMP/task3a-riscv-build.log"
+          test -s ../program.hex
+          test -s ../program.lss
+          test -s ../.temp.file.elf
+          rm -f generatehex_keep_elf.sh
+
+      - name: Audit RISC-V image and memory sections
+        working-directory: Task_3/Task_3A/code
+        run: |
+          test "$(wc -l < program.hex)" -eq 257
+          test "$(head -n 1 program.hex)" = '@00000000'
+          riscv64-unknown-elf-size -B .temp.file.elf | tee "$RUNNER_TEMP/task3a-size.log"
+          riscv64-unknown-elf-objdump -h .temp.file.elf | tee "$RUNNER_TEMP/task3a-sections.log"
+          riscv64-unknown-elf-objdump -d .temp.file.elf > "$RUNNER_TEMP/task3a-disassembly.txt"
+          if grep -Eiq '[[:space:]](mul|mulh|mulhsu|mulhu|div|divu|rem|remu)([[:space:]]|$)' "$RUNNER_TEMP/task3a-disassembly.txt"; then
+            echo 'Forbidden M-extension arithmetic found'; exit 1
+          fi
+          echo 'PASS: 1024-word HEX image; no M-extension instructions'
+          rm -f .temp.file.elf
+
+      - name: Package exact portal folder structure
+        run: |
+          mkdir -p "$RUNNER_TEMP/package"
+          mkdir -p "$RUNNER_TEMP/package/lq_1137_task3a"
+          cp -a Task_3/Task_3A/code "$RUNNER_TEMP/package/lq_1137_task3a/"
+          cd "$RUNNER_TEMP/package"
+          zip -qr "$GITHUB_WORKSPACE/lq_1137_task3a.zip" lq_1137_task3a
+          unzip -t "$GITHUB_WORKSPACE/lq_1137_task3a.zip"
+          unzip -l "$GITHUB_WORKSPACE/lq_1137_task3a.zip"
+          sha256sum "$GITHUB_WORKSPACE/lq_1137_task3a.zip" | tee "$GITHUB_WORKSPACE/task3a-final-sha256.txt"
+
+      - name: Upload final submission ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: lq-1137-task3a-corrected-graph-final
+          path: |
+            lq_1137_task3a.zip
+            task3a-final-sha256.txt
+          if-no-files-found: error
