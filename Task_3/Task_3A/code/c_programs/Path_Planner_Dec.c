@@ -188,308 +188,194 @@ Examples:
 // Custom Functions
 
 // ############# Add your code here #############
+#define EDGE(n, w) ((uint16_t)(((w) << 6) | (n)))
 
-static uint8_t psbox(uint8_t x) {
-    uint32_t t;
-    if (x & 8u) t = 0x21748FE3u;
-    else t = 0xDA09B65Cu;
-    return (uint8_t)((t >> ((x & 7u) << 2)) & 15u);
-}
-static uint8_t pisbox(uint8_t x) {
-    uint32_t t;
-    if (x & 8u) t = 0xA970364Bu;
-    else t = 0xD21C8FE5u;
-    return (uint8_t)((t >> ((x & 7u) << 2)) & 15u);
-}
-static uint32_t pisbox_word(uint32_t x) {
-    uint32_t y = 0;
-    uint8_t i;
-    for (i = 0; i < 8; ++i) {
-        y = (y >> 4) | ((uint32_t)pisbox((uint8_t)(x & 15u)) << 28);
-        x >>= 4;
-    }
-    return y;
-}
+static const uint8_t sbox[16] = {
+    0xC, 0x5, 0x6, 0xB, 0x9, 0x0, 0xA, 0xD,
+    0x3, 0xE, 0xF, 0x8, 0x4, 0x7, 0x1, 0x2
+};
+
+static const uint8_t isbox[16] = {
+    0x5, 0xE, 0xF, 0x8, 0xC, 0x1, 0x2, 0xD,
+    0xB, 0x4, 0x6, 0x3, 0x0, 0x7, 0x9, 0xA
+};
+
+static const uint16_t graph[36][4] = {
+    {EDGE(36, 100), EDGE(5, 5),  EDGE(4, 15),  EDGE(6, 15)},
+    {EDGE(4, 5),    0,           0,             0},
+    {EDGE(6, 5),    0,           0,             0},
+    {EDGE(2, 5),    EDGE(1, 15), EDGE(14, 15), 0},
+    {EDGE(1, 5),    EDGE(7, 11), EDGE(8, 11),   0},
+    {EDGE(3, 5),    EDGE(1, 15), EDGE(20, 15),  0},
+    {EDGE(5, 11),   EDGE(10, 5), EDGE(15, 11),  0},
+    {EDGE(5, 11),   EDGE(11, 5), EDGE(20, 11),  0},
+    {EDGE(11, 7),   EDGE(12, 5), 0,             0},
+    {EDGE(7, 5),    0,           0,             0},
+    {EDGE(8, 5),    EDGE(9, 7),  EDGE(19, 7),   0},
+    {EDGE(9, 5),    0,           0,             0},
+    {EDGE(14, 5),   EDGE(30, 19),0,             0},
+    {EDGE(13, 5),   EDGE(15, 5), EDGE(4, 15),   0},
+    {EDGE(14, 5),   EDGE(7, 11), 0,             0},
+    {EDGE(17, 5),   EDGE(23, 7), 0,             0},
+    {EDGE(16, 5),   0,           0,             0},
+    {EDGE(19, 5),   0,           0,             0},
+    {EDGE(18, 5),   EDGE(11, 7), 0,             0},
+    {EDGE(21, 5),   EDGE(6, 15), EDGE(8, 11),   EDGE(27, 11)},
+    {EDGE(20, 5),   0,           0,             0},
+    {EDGE(25, 5),   0,           0,             0},
+    {EDGE(16, 7),   EDGE(25, 7), EDGE(26, 5),   0},
+    {EDGE(27, 5),   0,           0,             0},
+    {EDGE(22, 5),   EDGE(23, 7), 0,             0},
+    {EDGE(23, 5),   EDGE(29, 11),0,             0},
+    {EDGE(24, 5),   EDGE(20, 11),EDGE(29, 11),  0},
+    {EDGE(31, 5),   EDGE(32, 15),0,             0},
+    {EDGE(26, 11),  EDGE(27, 11),EDGE(32, 5),   0},
+    {EDGE(33, 5),   EDGE(13, 19),EDGE(35, 19),  0},
+    {EDGE(28, 5),   EDGE(34, 5), EDGE(35, 19),  0},
+    {EDGE(29, 5),   EDGE(28, 15),0,             0},
+    {EDGE(30, 5),   0,           0,             0},
+    {EDGE(31, 5),   0,           0,             0},
+    {EDGE(30, 19),  EDGE(31, 19),0,             0},
+    {EDGE(1, 100),  0,           0,             0}
+};
+
 static void key_next(uint32_t *kh, uint32_t *km, uint16_t *kl, uint8_t r) {
     uint32_t h = *kh, m = *km;
-    uint16_t l = *kl;
-    uint32_t nh = (h >> 19) | ((uint32_t)l << 13) | (m << 29);
+    uint32_t nh = (h >> 19) | ((uint32_t)*kl << 13) | (m << 29);
     uint32_t nm = (m >> 19) | (h << 13);
     uint16_t nl = (uint16_t)(m >> 3);
-    nh = (nh & 0x0FFFFFFFu) | ((uint32_t)psbox((uint8_t)(nh >> 28)) << 28);
-    nm ^= (uint32_t)(r >> 1);
+
+    nh = (nh & 0x0FFFFFFFu) | ((uint32_t)sbox[nh >> 28] << 28);
+    nm ^= r >> 1;
     nl ^= (uint16_t)((r & 1u) << 15);
     *kh = nh;
     *km = nm;
     *kl = nl;
 }
+
 static void key_prev(uint32_t *kh, uint32_t *km, uint16_t *kl, uint8_t r) {
     uint32_t h = *kh, m = *km;
     uint16_t l = *kl;
-    m ^= (uint32_t)(r >> 1);
+
+    m ^= r >> 1;
     l ^= (uint16_t)((r & 1u) << 15);
-    h = (h & 0x0FFFFFFFu) | ((uint32_t)pisbox((uint8_t)(h >> 28)) << 28);
-    {
-        uint32_t nh = (h << 19) | (m >> 13);
-        uint32_t nm = (m << 19) | ((uint32_t)l << 3) | (h >> 29);
-        uint16_t nl = (uint16_t)(h >> 13);
-        *kh = nh;
-        *km = nm;
-        *kl = nl;
-    }
+    h = (h & 0x0FFFFFFFu) | ((uint32_t)isbox[h >> 28] << 28);
+    *kh = (h << 19) | (m >> 13);
+    *km = (m << 19) | ((uint32_t)l << 3) | (h >> 29);
+    *kl = (uint16_t)(h >> 13);
 }
-static void inv_perm(uint32_t *hi, uint32_t *lo) {
-    uint32_t a = *hi, b = *lo, oh = a & 0x80000000u, ol = 0;
-    uint8_t i;
-    for (i = 0; i < 63; ++i) {
-        uint32_t bit;
-        uint16_t j;
-        if (i < 32) bit = (b >> i) & 1u;
-        else bit = (a >> (i - 32u)) & 1u;
-        if (bit) {
-            j = (uint16_t)((uint16_t)i << 2);
-            if (j >= 63u) j = (uint16_t)(j - 63u);
-            if (j >= 63u) j = (uint16_t)(j - 63u);
-            if (j >= 63u) j = (uint16_t)(j - 63u);
-            if (j < 32u) ol |= 1u << j;
-            else oh |= 1u << (j - 32u);
-        }
+
+static uint32_t inv_sbox(uint32_t x) {
+    uint32_t y = 0;
+    for (uint8_t i = 0; i < 8; ++i) {
+        y = (y >> 4) | ((uint32_t)isbox[x & 15u] << 28);
+        x >>= 4;
     }
+    return y;
+}
+
+static void inv_perm(uint32_t *hi, uint32_t *lo) {
+    uint32_t a = *hi, b = *lo;
+    uint32_t oh = a & 0x80000000u, ol = 0;
+
+    for (uint8_t i = 0; i < 63; ++i) {
+        uint32_t bit = i < 32 ? ((b >> i) & 1u) : ((a >> (i - 32u)) & 1u);
+        if (!bit) continue;
+
+        uint16_t pos = (uint16_t)i << 2;
+        if (pos >= 63u) pos -= 63u;
+        if (pos >= 63u) pos -= 63u;
+        if (pos >= 63u) pos -= 63u;
+        if (pos < 32u) ol |= 1u << pos;
+        else oh |= 1u << (pos - 32u);
+    }
+
     *hi = oh;
     *lo = ol;
 }
+
 static void present_decrypt(uint32_t *hi, uint32_t *lo) {
     uint32_t kh = PRESENT_KEY_HI, km = PRESENT_KEY_MID;
     uint16_t kl = PRESENT_KEY_LO;
-    uint8_t r;
-    for (r = 1; r <= 31; ++r) key_next(&kh, &km, &kl, r);
+
+    for (uint8_t r = 1; r <= 31; ++r) key_next(&kh, &km, &kl, r);
     *hi ^= kh;
     *lo ^= km;
-    for (r = 31; r > 0; --r) {
+
+    for (uint8_t r = 31; r > 0; --r) {
         key_prev(&kh, &km, &kl, r);
         inv_perm(hi, lo);
-        *hi = pisbox_word(*hi);
-        *lo = pisbox_word(*lo);
+        *hi = inv_sbox(*hi);
+        *lo = inv_sbox(*lo);
         *hi ^= kh;
         *lo ^= km;
     }
 }
-static uint16_t select_edge(uint8_t k, uint16_t a, uint16_t b, uint16_t c, uint16_t d) {
-    uint16_t m0 = (uint16_t)(0u - (uint16_t)(k == 0u));
-    uint16_t m1 = (uint16_t)(0u - (uint16_t)(k == 1u));
-    uint16_t m2 = (uint16_t)(0u - (uint16_t)(k == 2u));
-    uint16_t m3 = (uint16_t)(0u - (uint16_t)(k == 3u));
-    return (uint16_t)((a & m0) | (b & m1) | (c & m2) | (d & m3));
+
+static uint16_t get_edge(uint8_t node, uint8_t slot) {
+    if (node < 1u || node > 36u || slot > 3u) return 0;
+    return graph[node - 1u][slot];
 }
-static uint16_t get_edge(uint8_t n, uint8_t k) {
-    if (n == 0u || n > 36u) return 0;
-    if (n <= 18u) {
-        if (n <= 9u) {
-            if (n <= 5u) {
-                if (n <= 3u) {
-                    if (n <= 2u) {
-                        if (n <= 1u) {
-                            return select_edge(k, 0x1924u, 0x0145u, 0x03C4u, 0x03C6u);
-                        } else {
-                            return select_edge(k, 0x0144u, 0x0000u, 0x0000u, 0x0000u);
-                        }
-                    } else {
-                        return select_edge(k, 0x0146u, 0x0000u, 0x0000u, 0x0000u);
-                    }
-                } else {
-                    if (n <= 4u) {
-                        return select_edge(k, 0x0142u, 0x03C1u, 0x03CEu, 0x0000u);
-                    } else {
-                        return select_edge(k, 0x0141u, 0x02C7u, 0x02C8u, 0x0000u);
-                    }
-                }
-            } else {
-                if (n <= 7u) {
-                    if (n <= 6u) {
-                        return select_edge(k, 0x0143u, 0x03C1u, 0x03D4u, 0x0000u);
-                    } else {
-                        return select_edge(k, 0x02C5u, 0x014Au, 0x02CFu, 0x0000u);
-                    }
-                } else {
-                    if (n <= 8u) {
-                        return select_edge(k, 0x02C5u, 0x014Bu, 0x02D4u, 0x0000u);
-                    } else {
-                        return select_edge(k, 0x01CBu, 0x014Cu, 0x0000u, 0x0000u);
-                    }
-                }
-            }
-        } else {
-            if (n <= 14u) {
-                if (n <= 12u) {
-                    if (n <= 11u) {
-                        if (n <= 10u) {
-                            return select_edge(k, 0x0147u, 0x0000u, 0x0000u, 0x0000u);
-                        } else {
-                            return select_edge(k, 0x0148u, 0x01C9u, 0x01D3u, 0x0000u);
-                        }
-                    } else {
-                        return select_edge(k, 0x0149u, 0x0000u, 0x0000u, 0x0000u);
-                    }
-                } else {
-                    if (n <= 13u) {
-                        return select_edge(k, 0x014Eu, 0x04DEu, 0x0000u, 0x0000u);
-                    } else {
-                        return select_edge(k, 0x014Du, 0x014Fu, 0x03C4u, 0x0000u);
-                    }
-                }
-            } else {
-                if (n <= 16u) {
-                    if (n <= 15u) {
-                        return select_edge(k, 0x014Eu, 0x02C7u, 0x0000u, 0x0000u);
-                    } else {
-                        return select_edge(k, 0x0151u, 0x01D7u, 0x0000u, 0x0000u);
-                    }
-                } else {
-                    if (n <= 17u) {
-                        return select_edge(k, 0x0150u, 0x0000u, 0x0000u, 0x0000u);
-                    } else {
-                        return select_edge(k, 0x0153u, 0x0000u, 0x0000u, 0x0000u);
-                    }
-                }
-            }
-        }
-    } else {
-        if (n <= 27u) {
-            if (n <= 23u) {
-                if (n <= 21u) {
-                    if (n <= 20u) {
-                        if (n <= 19u) {
-                            return select_edge(k, 0x0152u, 0x01CBu, 0x0000u, 0x0000u);
-                        } else {
-                            return select_edge(k, 0x0155u, 0x03C6u, 0x02C8u, 0x02DBu);
-                        }
-                    } else {
-                        return select_edge(k, 0x0154u, 0x0000u, 0x0000u, 0x0000u);
-                    }
-                } else {
-                    if (n <= 22u) {
-                        return select_edge(k, 0x0159u, 0x0000u, 0x0000u, 0x0000u);
-                    } else {
-                        return select_edge(k, 0x01D0u, 0x01D9u, 0x015Au, 0x0000u);
-                    }
-                }
-            } else {
-                if (n <= 25u) {
-                    if (n <= 24u) {
-                        return select_edge(k, 0x015Bu, 0x0000u, 0x0000u, 0x0000u);
-                    } else {
-                        return select_edge(k, 0x0156u, 0x01D7u, 0x0000u, 0x0000u);
-                    }
-                } else {
-                    if (n <= 26u) {
-                        return select_edge(k, 0x0157u, 0x02DDu, 0x0000u, 0x0000u);
-                    } else {
-                        return select_edge(k, 0x0158u, 0x02D4u, 0x02DDu, 0x0000u);
-                    }
-                }
-            }
-        } else {
-            if (n <= 32u) {
-                if (n <= 30u) {
-                    if (n <= 29u) {
-                        if (n <= 28u) {
-                            return select_edge(k, 0x015Fu, 0x03E0u, 0x0000u, 0x0000u);
-                        } else {
-                            return select_edge(k, 0x02DAu, 0x02DBu, 0x0160u, 0x0000u);
-                        }
-                    } else {
-                        return select_edge(k, 0x0161u, 0x04CDu, 0x04E3u, 0x0000u);
-                    }
-                } else {
-                    if (n <= 31u) {
-                        return select_edge(k, 0x015Cu, 0x0162u, 0x04E3u, 0x0000u);
-                    } else {
-                        return select_edge(k, 0x015Du, 0x03DCu, 0x0000u, 0x0000u);
-                    }
-                }
-            } else {
-                if (n <= 34u) {
-                    if (n <= 33u) {
-                        return select_edge(k, 0x015Eu, 0x0000u, 0x0000u, 0x0000u);
-                    } else {
-                        return select_edge(k, 0x015Fu, 0x0000u, 0x0000u, 0x0000u);
-                    }
-                } else {
-                    if (n <= 35u) {
-                        return select_edge(k, 0x04DEu, 0x04DFu, 0x0000u, 0x0000u);
-                    } else {
-                        return select_edge(k, 0x1901u, 0x0000u, 0x0000u, 0x0000u);
-                    }
-                }
-            }
-        }
-    }
-    return 0;
-}
+
 static uint8_t shortest_path(uint8_t start, uint8_t end, uint8_t path[40], uint8_t dist[36]) {
-    uint8_t i, j, k, u, cur, found;
-    uint8_t best, d, e, v;
-    uint16_t nd;
+    uint8_t seen[5] = {0};
+    uint8_t i, j, k, node, cur, best, cost, next;
+
+    if (start < 1u || start > 36u || end < 1u || end > 36u) return 0;
     for (i = 0; i < 36; ++i) dist[i] = 255u;
-    for (i = 0; i < 5; ++i) path[i] = 0;
     dist[start - 1u] = 0;
+
     for (i = 0; i < 36; ++i) {
         best = 255u;
-        u = 0;
+        node = 0;
         for (j = 0; j < 36; ++j) {
-            if (!(path[j >> 3] & (uint8_t)(1u << (j & 7u))) && dist[j] < best) {
+            if (!(seen[j >> 3] & (uint8_t)(1u << (j & 7u))) && dist[j] < best) {
                 best = dist[j];
-                u = (uint8_t)(j + 1u);
+                node = (uint8_t)(j + 1u);
             }
         }
-        if (u == 0) break;
-        path[(u - 1u) >> 3] |= (uint8_t)(1u << ((u - 1u) & 7u));
-        if (u == end) break;
+        if (!node) break;
+        seen[(node - 1u) >> 3] |= (uint8_t)(1u << ((node - 1u) & 7u));
+        if (node == end) break;
+
         for (k = 0; k < 4; ++k) {
-            uint16_t edge = get_edge(u, k);
-            if (edge) {
-                v = (uint8_t)(edge & 63u);
-                e = (uint8_t)(edge >> 6);
-                if (!(path[(v - 1u) >> 3] & (uint8_t)(1u << ((v - 1u) & 7u)))) {
-                    nd = (uint16_t)best + e;
-                    d = dist[v - 1u];
-                    if (nd < d) dist[v - 1u] = (uint8_t)nd;
-                }
+            uint16_t e = get_edge(node, k);
+            if (!e) continue;
+            next = (uint8_t)(e & 63u);
+            cost = (uint8_t)(e >> 6);
+            if (!(seen[(next - 1u) >> 3] & (uint8_t)(1u << ((next - 1u) & 7u)))) {
+                uint16_t candidate = (uint16_t)best + cost;
+                if (candidate < dist[next - 1u]) dist[next - 1u] = (uint8_t)candidate;
             }
         }
     }
+
     cur = end;
     i = 0;
     path[i++] = cur;
     while (cur != start && i < 40u) {
-        found = 0;
         best = dist[cur - 1u];
         for (k = 0; k < 4; ++k) {
-            uint16_t edge = get_edge(cur, k);
-            if (edge) {
-                v = (uint8_t)(edge & 63u);
-                d = dist[v - 1u];
-                nd = (uint16_t)d + (edge >> 6);
-                if (nd == best) {
-                    cur = v;
-                    path[i++] = cur;
-                    found = 1;
-                    break;
-                }
-            }
+            uint16_t e = get_edge(cur, k);
+            if (!e) continue;
+            next = (uint8_t)(e & 63u);
+            cost = (uint8_t)(e >> 6);
+            if (dist[next - 1u] != 255u && (uint16_t)dist[next - 1u] + cost == best) break;
         }
-        if (!found) {
-            path[0] = start;
-            return 1;
-        }
+        if (k == 4u) return 0;
+        cur = next;
+        path[i++] = cur;
     }
+
+    if (cur != start) return 0;
     for (j = 0; j < (i >> 1); ++j) {
         uint8_t t = path[j];
-        path[j] = path[i - 1u - j];
-        path[i - 1u - j] = t;
+        path[j] = path[i - j - 1u];
+        path[i - j - 1u] = t;
     }
     return i;
 }
+
 // ##############################################
 
 // main function
@@ -560,19 +446,20 @@ int main(int argc, char const *argv[]) {
     uint8_t end_point   = 0;              // where the bot goes
 
     // ############# Add your code here #############
+#ifdef __linux__
+    uint8_t dist[36];
+#else
+    uint8_t *dist = (uint8_t *)0x02000020u;
+#endif
 
-    // prefer declaring variables like this
-    #ifdef __linux__
-        uint8_t dist[36];
-    #else
-        uint8_t *dist = (uint8_t *) 0x02000020;
-    #endif
+    uint8_t done = 1;
+    if (start_point < 1u || start_point > 36u) return 1;
 
     if (is_encrypted) {
         uint32_t block_hi = ENCRYPTED_HI;
         uint32_t block_lo = ENCRYPTED_LO;
-        uint8_t done;
         present_decrypt(&block_hi, &block_lo);
+
         done = (uint8_t)(block_hi >> 24);
         message[0] = (uint8_t)(block_hi >> 16);
         message[1] = (uint8_t)(block_hi >> 8);
@@ -580,16 +467,23 @@ int main(int argc, char const *argv[]) {
         message[3] = (uint8_t)(block_lo >> 24);
         message[4] = (uint8_t)(block_lo >> 16);
         end_point = (uint8_t)block_lo;
-        if (done == 0u) {
+
+        if (done > 1u || end_point < 1u || end_point > 36u) return 1;
+        if (!done) {
+            uint8_t next = (uint8_t)(block_lo >> 8);
+            if (next < 1u || next > 36u) return 1;
             IS_ENCRYPTED = 0;
             CURRENT_NODE = end_point;
-            NEXT_NODE = (uint8_t)(block_lo >> 8);
+            NEXT_NODE = next;
         }
     } else {
         end_point = NEXT_NODE;
+        if (end_point < 1u || end_point > 36u) return 1;
     }
 
     idx = shortest_path(start_point, end_point, path_planned, dist);
+    if (!idx) return 1;
+);
 
     // ##############################################
 
