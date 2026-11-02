@@ -206,7 +206,7 @@ jobs:
               return 0;
           }
           EOF
-          gcc -std=c11 -O2 -fsanitize=address,undefined /tmp/route_audit.c -o /tmp/route_audit
+          gcc -std=c11 -O2 -fsanitize=address,undefined -I. /tmp/route_audit.c -o /tmp/route_audit
           /tmp/route_audit
       - name: Official RV32I build
         working-directory: Task_3/Task_3A/code/c_programs
