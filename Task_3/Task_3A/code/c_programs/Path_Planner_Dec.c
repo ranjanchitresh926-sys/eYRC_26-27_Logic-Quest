@@ -189,8 +189,305 @@ Examples:
 
 // ############# Add your code here #############
 
-// add your own #defines and functions here
-// (e.g. the PRESENT-80 decryption and the path planner)
+static uint8_t psbox(uint8_t x) {
+    uint32_t t;
+    if (x & 8u) t = 0x21748FE3u;
+    else t = 0xDA09B65Cu;
+    return (uint8_t)((t >> ((x & 7u) << 2)) & 15u);
+}
+static uint8_t pisbox(uint8_t x) {
+    uint32_t t;
+    if (x & 8u) t = 0xA970364Bu;
+    else t = 0xD21C8FE5u;
+    return (uint8_t)((t >> ((x & 7u) << 2)) & 15u);
+}
+static uint32_t pisbox_word(uint32_t x) {
+    uint32_t y = 0;
+    uint8_t i;
+    for (i = 0; i < 8; ++i) {
+        y = (y >> 4) | ((uint32_t)pisbox((uint8_t)(x & 15u)) << 28);
+        x >>= 4;
+    }
+    return y;
+}
+static void key_next(uint32_t *kh, uint32_t *km, uint16_t *kl, uint8_t r) {
+    uint32_t h = *kh, m = *km;
+    uint16_t l = *kl;
+    uint32_t nh = (h >> 19) | ((uint32_t)l << 13) | (m << 29);
+    uint32_t nm = (m >> 19) | (h << 13);
+    uint16_t nl = (uint16_t)(m >> 3);
+    nh = (nh & 0x0FFFFFFFu) | ((uint32_t)psbox((uint8_t)(nh >> 28)) << 28);
+    nm ^= (uint32_t)(r >> 1);
+    nl ^= (uint16_t)((r & 1u) << 15);
+    *kh = nh;
+    *km = nm;
+    *kl = nl;
+}
+static void key_prev(uint32_t *kh, uint32_t *km, uint16_t *kl, uint8_t r) {
+    uint32_t h = *kh, m = *km;
+    uint16_t l = *kl;
+    m ^= (uint32_t)(r >> 1);
+    l ^= (uint16_t)((r & 1u) << 15);
+    h = (h & 0x0FFFFFFFu) | ((uint32_t)pisbox((uint8_t)(h >> 28)) << 28);
+    {
+        uint32_t nh = (h << 19) | (m >> 13);
+        uint32_t nm = (m << 19) | ((uint32_t)l << 3) | (h >> 29);
+        uint16_t nl = (uint16_t)(h >> 13);
+        *kh = nh;
+        *km = nm;
+        *kl = nl;
+    }
+}
+static void inv_perm(uint32_t *hi, uint32_t *lo) {
+    uint32_t a = *hi, b = *lo, oh = a & 0x80000000u, ol = 0;
+    uint8_t i;
+    for (i = 0; i < 63; ++i) {
+        uint32_t bit;
+        uint16_t j;
+        if (i < 32) bit = (b >> i) & 1u;
+        else bit = (a >> (i - 32u)) & 1u;
+        if (bit) {
+            j = (uint16_t)((uint16_t)i << 2);
+            if (j >= 63u) j = (uint16_t)(j - 63u);
+            if (j >= 63u) j = (uint16_t)(j - 63u);
+            if (j >= 63u) j = (uint16_t)(j - 63u);
+            if (j < 32u) ol |= 1u << j;
+            else oh |= 1u << (j - 32u);
+        }
+    }
+    *hi = oh;
+    *lo = ol;
+}
+static void present_decrypt(uint32_t *hi, uint32_t *lo) {
+    uint32_t kh = PRESENT_KEY_HI, km = PRESENT_KEY_MID;
+    uint16_t kl = PRESENT_KEY_LO;
+    uint8_t r;
+    for (r = 1; r <= 31; ++r) key_next(&kh, &km, &kl, r);
+    *hi ^= kh;
+    *lo ^= km;
+    for (r = 31; r > 0; --r) {
+        key_prev(&kh, &km, &kl, r);
+        inv_perm(hi, lo);
+        *hi = pisbox_word(*hi);
+        *lo = pisbox_word(*lo);
+        *hi ^= kh;
+        *lo ^= km;
+    }
+}
+static uint16_t select_edge(uint8_t k, uint16_t a, uint16_t b, uint16_t c, uint16_t d) {
+    uint16_t m0 = (uint16_t)(0u - (uint16_t)(k == 0u));
+    uint16_t m1 = (uint16_t)(0u - (uint16_t)(k == 1u));
+    uint16_t m2 = (uint16_t)(0u - (uint16_t)(k == 2u));
+    uint16_t m3 = (uint16_t)(0u - (uint16_t)(k == 3u));
+    return (uint16_t)((a & m0) | (b & m1) | (c & m2) | (d & m3));
+}
+static uint16_t get_edge(uint8_t n, uint8_t k) {
+    if (n == 0u || n > 36u) return 0;
+    if (n <= 18u) {
+        if (n <= 9u) {
+            if (n <= 5u) {
+                if (n <= 3u) {
+                    if (n <= 2u) {
+                        if (n <= 1u) {
+                            return select_edge(k, 0x1924u, 0x0145u, 0x03C4u, 0x03C6u);
+                        } else {
+                            return select_edge(k, 0x0144u, 0x0000u, 0x0000u, 0x0000u);
+                        }
+                    } else {
+                        return select_edge(k, 0x0146u, 0x0000u, 0x0000u, 0x0000u);
+                    }
+                } else {
+                    if (n <= 4u) {
+                        return select_edge(k, 0x0142u, 0x03C1u, 0x03CEu, 0x0000u);
+                    } else {
+                        return select_edge(k, 0x0141u, 0x02C7u, 0x02C8u, 0x0000u);
+                    }
+                }
+            } else {
+                if (n <= 7u) {
+                    if (n <= 6u) {
+                        return select_edge(k, 0x0143u, 0x03C1u, 0x03D4u, 0x0000u);
+                    } else {
+                        return select_edge(k, 0x02C5u, 0x014Au, 0x02CFu, 0x0000u);
+                    }
+                } else {
+                    if (n <= 8u) {
+                        return select_edge(k, 0x02C5u, 0x014Bu, 0x02D4u, 0x0000u);
+                    } else {
+                        return select_edge(k, 0x01CBu, 0x014Cu, 0x0000u, 0x0000u);
+                    }
+                }
+            }
+        } else {
+            if (n <= 14u) {
+                if (n <= 12u) {
+                    if (n <= 11u) {
+                        if (n <= 10u) {
+                            return select_edge(k, 0x0147u, 0x0000u, 0x0000u, 0x0000u);
+                        } else {
+                            return select_edge(k, 0x0148u, 0x01C9u, 0x01D3u, 0x0000u);
+                        }
+                    } else {
+                        return select_edge(k, 0x0149u, 0x0000u, 0x0000u, 0x0000u);
+                    }
+                } else {
+                    if (n <= 13u) {
+                        return select_edge(k, 0x014Eu, 0x04DEu, 0x0000u, 0x0000u);
+                    } else {
+                        return select_edge(k, 0x014Du, 0x014Fu, 0x03C4u, 0x0000u);
+                    }
+                }
+            } else {
+                if (n <= 16u) {
+                    if (n <= 15u) {
+                        return select_edge(k, 0x014Eu, 0x02C7u, 0x0000u, 0x0000u);
+                    } else {
+                        return select_edge(k, 0x0151u, 0x01D7u, 0x0000u, 0x0000u);
+                    }
+                } else {
+                    if (n <= 17u) {
+                        return select_edge(k, 0x0150u, 0x0000u, 0x0000u, 0x0000u);
+                    } else {
+                        return select_edge(k, 0x0153u, 0x0000u, 0x0000u, 0x0000u);
+                    }
+                }
+            }
+        }
+    } else {
+        if (n <= 27u) {
+            if (n <= 23u) {
+                if (n <= 21u) {
+                    if (n <= 20u) {
+                        if (n <= 19u) {
+                            return select_edge(k, 0x0152u, 0x01CBu, 0x0000u, 0x0000u);
+                        } else {
+                            return select_edge(k, 0x0155u, 0x03C6u, 0x02C8u, 0x02DBu);
+                        }
+                    } else {
+                        return select_edge(k, 0x0154u, 0x0000u, 0x0000u, 0x0000u);
+                    }
+                } else {
+                    if (n <= 22u) {
+                        return select_edge(k, 0x0159u, 0x0000u, 0x0000u, 0x0000u);
+                    } else {
+                        return select_edge(k, 0x01D0u, 0x01D9u, 0x015Au, 0x0000u);
+                    }
+                }
+            } else {
+                if (n <= 25u) {
+                    if (n <= 24u) {
+                        return select_edge(k, 0x015Bu, 0x0000u, 0x0000u, 0x0000u);
+                    } else {
+                        return select_edge(k, 0x0156u, 0x01D7u, 0x0000u, 0x0000u);
+                    }
+                } else {
+                    if (n <= 26u) {
+                        return select_edge(k, 0x0157u, 0x02DDu, 0x0000u, 0x0000u);
+                    } else {
+                        return select_edge(k, 0x0158u, 0x02D4u, 0x02DDu, 0x0000u);
+                    }
+                }
+            }
+        } else {
+            if (n <= 32u) {
+                if (n <= 30u) {
+                    if (n <= 29u) {
+                        if (n <= 28u) {
+                            return select_edge(k, 0x015Fu, 0x03E0u, 0x0000u, 0x0000u);
+                        } else {
+                            return select_edge(k, 0x02DAu, 0x02DBu, 0x0160u, 0x0000u);
+                        }
+                    } else {
+                        return select_edge(k, 0x0161u, 0x04CDu, 0x04E3u, 0x0000u);
+                    }
+                } else {
+                    if (n <= 31u) {
+                        return select_edge(k, 0x015Cu, 0x0162u, 0x04E3u, 0x0000u);
+                    } else {
+                        return select_edge(k, 0x015Du, 0x03DCu, 0x0000u, 0x0000u);
+                    }
+                }
+            } else {
+                if (n <= 34u) {
+                    if (n <= 33u) {
+                        return select_edge(k, 0x015Eu, 0x0000u, 0x0000u, 0x0000u);
+                    } else {
+                        return select_edge(k, 0x015Fu, 0x0000u, 0x0000u, 0x0000u);
+                    }
+                } else {
+                    if (n <= 35u) {
+                        return select_edge(k, 0x04DEu, 0x04DFu, 0x0000u, 0x0000u);
+                    } else {
+                        return select_edge(k, 0x1901u, 0x0000u, 0x0000u, 0x0000u);
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+static uint8_t shortest_path(uint8_t start, uint8_t end, uint8_t path[40], uint16_t dist[36]) {
+    uint8_t i, j, k, u, cur, found;
+    uint16_t best, d, e, v, nd;
+    for (i = 0; i < 36; ++i) dist[i] = 0x7FFFu;
+    dist[start - 1u] = 0;
+    for (i = 0; i < 36; ++i) {
+        best = 0x7FFFu;
+        u = 0;
+        for (j = 0; j < 36; ++j) {
+            d = dist[j];
+            if (!(d & 0x8000u) && d < best) {
+                best = d;
+                u = (uint8_t)(j + 1u);
+            }
+        }
+        if (u == 0) break;
+        dist[u - 1u] = (uint16_t)(best | 0x8000u);
+        if (u == end) break;
+        for (k = 0; k < 4; ++k) {
+            e = get_edge(u, k);
+            if (e) {
+                v = e & 63u;
+                d = dist[v - 1u];
+                if (!(d & 0x8000u)) {
+                    nd = (uint16_t)(best + (e >> 6));
+                    if (nd < d) dist[v - 1u] = nd;
+                }
+            }
+        }
+    }
+    cur = end;
+    i = 0;
+    path[i++] = cur;
+    while (cur != start && i < 40u) {
+        found = 0;
+        best = (uint16_t)(dist[cur - 1u] & 0x7FFFu);
+        for (k = 0; k < 4; ++k) {
+            e = get_edge(cur, k);
+            if (e) {
+                v = e & 63u;
+                d = (uint16_t)(dist[v - 1u] & 0x7FFFu);
+                nd = (uint16_t)(d + (e >> 6));
+                if (nd == best) {
+                    cur = (uint8_t)v;
+                    path[i++] = cur;
+                    found = 1;
+                    break;
+                }
+            }
+        }
+        if (!found) {
+            path[0] = start;
+            return 1;
+        }
+    }
+    for (j = 0; j < (i >> 1); ++j) {
+        uint8_t t = path[j];
+        path[j] = path[i - 1u - j];
+        path[i - 1u - j] = t;
+    }
+    return i;
+}
 
 // ##############################################
 
@@ -263,15 +560,35 @@ int main(int argc, char const *argv[]) {
 
     // ############# Add your code here #############
 
-    // set path_planned[] and idx, message[] when is_encrypted = 1, and the
-    // inputs for the next run (see Outputs at the top of this file)
-
     // prefer declaring variables like this
     #ifdef __linux__
-        uint16_t dist[40];
+        uint16_t dist[36];
     #else
-        uint16_t *dist = (uint16_t *) 0x02000020;    // working memory starts at 0x02000020
+        uint16_t *dist = (uint16_t *) 0x02000020;
     #endif
+
+    if (is_encrypted) {
+        uint32_t block_hi = ENCRYPTED_HI;
+        uint32_t block_lo = ENCRYPTED_LO;
+        uint8_t done;
+        present_decrypt(&block_hi, &block_lo);
+        done = (uint8_t)(block_hi >> 24);
+        message[0] = (uint8_t)(block_hi >> 16);
+        message[1] = (uint8_t)(block_hi >> 8);
+        message[2] = (uint8_t)block_hi;
+        message[3] = (uint8_t)(block_lo >> 24);
+        message[4] = (uint8_t)(block_lo >> 16);
+        end_point = (uint8_t)block_lo;
+        if (done == 0u) {
+            IS_ENCRYPTED = 0;
+            CURRENT_NODE = end_point;
+            NEXT_NODE = (uint8_t)(block_lo >> 8);
+        }
+    } else {
+        end_point = NEXT_NODE;
+    }
+
+    idx = shortest_path(start_point, end_point, path_planned, dist);
 
     // ##############################################
 
