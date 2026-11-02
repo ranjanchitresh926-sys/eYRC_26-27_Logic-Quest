@@ -216,6 +216,31 @@ jobs:
               start=s.index("static uint8_t plan_path(")
               end=s.index("\n// ##############################################",start)
               return s[:start]+helper+s[end:]
+          def decrypt_round_split(s):
+              start=s.index("static void present_decrypt(")
+              end=s.index("static uint16_t select_edge(",start)
+              new="""static void decrypt_round(uint32_t *hi, uint32_t *lo, uint32_t kh, uint32_t km) {
+              inv_perm(hi, lo);
+              *hi = pisbox_word(*hi) ^ kh;
+              *lo = pisbox_word(*lo) ^ km;
+          }
+          static void present_decrypt(uint32_t *hi, uint32_t *lo) {
+              uint32_t kh = PRESENT_KEY_HI, km = PRESENT_KEY_MID;
+              uint16_t kl = PRESENT_KEY_LO;
+              uint8_t r;
+              void (* volatile kn)(uint32_t *,uint32_t *,uint16_t *,uint8_t) = key_next;
+              void (* volatile kp)(uint32_t *,uint32_t *,uint16_t *,uint8_t) = key_prev;
+              void (* volatile rd)(uint32_t *,uint32_t *,uint32_t,uint32_t) = decrypt_round;
+              for (r = 1; r <= 31; ++r) kn(&kh, &km, &kl, r);
+              *hi ^= kh;
+              *lo ^= km;
+              for (r = 31; r > 0; --r) {
+                  kp(&kh, &km, &kl, r);
+                  rd(hi, lo, kh, km);
+              }
+          }
+          """
+              return s[:start]+new+s[end:]
           def decrypt_split(s):
               old="""static void present_decrypt(uint32_t *hi, uint32_t *lo) {
               uint32_t kh = PRESENT_KEY_HI, km = PRESENT_KEY_MID;
@@ -267,6 +292,8 @@ jobs:
               "step_split_dec":decrypt_indirect(path_indirect(step_split(base))),
               "step_split_dec_inner":decrypt_indirect(path_indirect(decrypt_split(step_split(base)))),
               "step_split_inner":path_indirect(decrypt_split(step_split(base))),
+              "round_split":decrypt_indirect(path_indirect(edge_indirect(decrypt_round_split(base)))),
+              "round_split_path":decrypt_indirect(path_indirect(step_split(decrypt_round_split(base)))),
           }
           droot=Path("/tmp/stack_profile"); droot.mkdir(exist_ok=True)
           for name,src in variants.items():
