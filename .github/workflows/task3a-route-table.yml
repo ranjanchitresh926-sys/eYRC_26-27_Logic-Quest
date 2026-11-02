@@ -1,6 +1,6 @@
 name: Task 3A stateless routing experiment
 permissions:
-  contents: read
+  contents: write
 on:
   push:
     branches:
@@ -412,6 +412,11 @@ jobs:
           assert "lq_1137_task3a/code/program.lss" in names
           print("PASS: exact submission ZIP")
           PY
+          git config user.name "Task 3A build"
+          git config user.email "243762525+ranjanchitresh926-sys@users.noreply.github.com"
+          git add -f Task_3/Task_3A/code/c_programs/Path_Planner_Dec.c Task_3/Task_3A/code/program.hex
+          git commit -m "Apply RAM-efficient Task 3A route planner"
+          git push origin task-3a-solution
       - uses: actions/upload-artifact@v4
         with:
           name: task3a_route_table_candidate
