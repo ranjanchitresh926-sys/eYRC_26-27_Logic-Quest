@@ -456,16 +456,16 @@ static uint8_t route_slot(uint8_t src, uint8_t dst) {
                             b = 0x69955555u;
                             c = 0x0000006Au;
                         } else {
-                            a = 0x-6A597000u;
-                            b = 0x-59555556u;
+                            a = 0x95A69000u;
+                            b = 0xA6AAAAAAu;
                             c = 0x00000019u;
                         }
                     }
                 } else {
                     if (src <= 7u) {
                         if (src <= 6u) {
-                            a = 0x-6A596EBBu;
-                            b = 0x-59555556u;
+                            a = 0x95A69145u;
+                            b = 0xA6AAAAAAu;
                             c = 0x00000069u;
                         } else {
                             a = 0x2A040000u;
@@ -474,8 +474,8 @@ static uint8_t route_slot(uint8_t src, uint8_t dst) {
                         }
                     } else {
                         if (src <= 8u) {
-                            a = 0x-7FAEF7E0u;
-                            b = 0x-5D55556Au;
+                            a = 0x80510820u;
+                            b = 0xA2AAAA96u;
                             c = 0x00000028u;
                         } else {
                             a = 0x00400000u;
@@ -547,8 +547,8 @@ static uint8_t route_slot(uint8_t src, uint8_t dst) {
                                 b = 0x55555541u;
                                 c = 0x00000055u;
                             } else {
-                                a = 0x-15555966u;
-                                b = 0x-40003D5u;
+                                a = 0xEAAAA69Au;
+                                b = 0xFBFFFC2Bu;
                                 c = 0x000000BEu;
                             }
                         } else {
@@ -563,7 +563,7 @@ static uint8_t route_slot(uint8_t src, uint8_t dst) {
                             c = 0x00000000u;
                         } else {
                             a = 0x2AAAAAAAu;
-                            b = 0x-55567958u;
+                            b = 0xAAA986A8u;
                             c = 0x000000AAu;
                         }
                     }
@@ -584,8 +584,8 @@ static uint8_t route_slot(uint8_t src, uint8_t dst) {
                             b = 0x55504154u;
                             c = 0x00000055u;
                         } else {
-                            a = 0x-6AAAAAABu;
-                            b = 0x-5575D6AAu;
+                            a = 0x95555555u;
+                            b = 0xAA8A2956u;
                             c = 0x0000006Au;
                         }
                     }
@@ -600,12 +600,12 @@ static uint8_t route_slot(uint8_t src, uint8_t dst) {
                                 c = 0x00000040u;
                             } else {
                                 a = 0x15555555u;
-                                b = 0x-576FBEACu;
+                                b = 0xA8904154u;
                                 c = 0x0000006Au;
                             }
                         } else {
-                            a = 0x-6AAAAAABu;
-                            b = 0x-5D5556AAu;
+                            a = 0x95555555u;
+                            b = 0xA2AAA956u;
                             c = 0x00000068u;
                         }
                     } else {
