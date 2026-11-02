@@ -39,7 +39,7 @@ jobs:
               subprocess.run(["riscv64-unknown-elf-gcc","-march=rv32i","-mabi=ilp32","--specs=picolibc.specs","-Os","-g3","-flto","-DPICOLIBC_INTEGER_PRINTF_SCANF","-Wall","-c",str(d/"Path_Planner_Dec.c"),"-o",str(obj)],check=True)
               subprocess.run(["riscv64-unknown-elf-gcc","-march=rv32i","-mabi=ilp32","--specs=picolibc.specs","-Os","-g3","-flto","-DPICOLIBC_INTEGER_PRINTF_SCANF","-Wl,--gc-sections,--defsym=__flash=0x00000000,--defsym=__flash_size=4096","--crt0=minimal","-Wl,--defsym=__ram=0x02000000,--defsym=__ram_size=512,--defsym=__stack_size=184","-Tpicolibc.ld","-o",str(elf),str(obj)],check=True)
               size=subprocess.check_output(["riscv64-unknown-elf-size","-B","--common",str(elf)],text=True).splitlines()[-1]
-              listing=subprocess.check_output(["riscv64-unknown-elf-objdump","-t","-d",str(elf)],text=True)
+              listing=subprocess.check_output(["riscv64-unknown-elf-objdump","-d","-M","no-aliases,numeric",str(elf)],text=True)
               frames=[]
               lines=listing.splitlines()
               for i,line in enumerate(lines):
