@@ -24,38 +24,47 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          import subprocess, re, shutil
+          import subprocess, re
           src=Path("c_programs/Path_Planner_Dec.c").read_text()
+          marker="// ############# Add your code here #############"
+          def with_ptrs(s, dec, path):
+              a=s.index(marker)
+              b=s.index(marker,a+len(marker))
+              pos=s.index("#endif",b)+len("#endif")
+              p=""
+              if dec: p+="\n    void (*volatile dec_call)(uint32_t *, uint32_t *) = present_decrypt;"
+              if path: p+="\n    uint8_t (*volatile path_call)(uint8_t, uint8_t, uint8_t *, uint8_t *) = shortest_path;"
+              s=s[:pos]+p+s[pos:]
+              if dec: s=s.replace("present_decrypt(&block_hi, &block_lo);","dec_call(&block_hi, &block_lo);")
+              if path: s=s.replace("shortest_path(start_point, end_point, path_planned, dist);","path_call(start_point, end_point, path_planned, dist);")
+              return s
           variants={
             "base":src,
-            "global_core":src.replace("static void present_decrypt(", "void present_decrypt(").replace("static uint8_t shortest_path(", "uint8_t shortest_path("),
-            "global_all":re.sub(r"(?m)^static (uint8_t|uint16_t|uint32_t|void) ",r"\1 ",src),
+            "volatile_dec":with_ptrs(src,True,False),
+            "volatile_path":with_ptrs(src,False,True),
+            "volatile_both":with_ptrs(src,True,True),
           }
           for name,content in variants.items():
               d=Path("/tmp")/name
               d.mkdir(exist_ok=True)
-              (d/"Path_Planner_Dec.c").write_text(content)
-              obj=d/"a.o"; elf=d/"a.elf"; lss=d/"a.lss"
-              subprocess.run(["riscv64-unknown-elf-gcc","-march=rv32i","-mabi=ilp32","--specs=picolibc.specs","-Os","-g3","-flto","-DPICOLIBC_INTEGER_PRINTF_SCANF","-Wall","-c",str(d/"Path_Planner_Dec.c"),"-o",str(obj)],check=True)
+              f=d/"Path_Planner_Dec.c"; f.write_text(content)
+              obj=d/"a.o"; elf=d/"a.elf"
+              subprocess.run(["riscv64-unknown-elf-gcc","-march=rv32i","-mabi=ilp32","--specs=picolibc.specs","-Os","-g3","-flto","-DPICOLIBC_INTEGER_PRINTF_SCANF","-Wall","-c",str(f),"-o",str(obj)],check=True)
               subprocess.run(["riscv64-unknown-elf-gcc","-march=rv32i","-mabi=ilp32","--specs=picolibc.specs","-Os","-g3","-flto","-DPICOLIBC_INTEGER_PRINTF_SCANF","-Wl,--gc-sections,--defsym=__flash=0x00000000,--defsym=__flash_size=4096","--crt0=minimal","-Wl,--defsym=__ram=0x02000000,--defsym=__ram_size=512,--defsym=__stack_size=184","-Tpicolibc.ld","-o",str(elf),str(obj)],check=True)
               size=subprocess.check_output(["riscv64-unknown-elf-size","-B","--common",str(elf)],text=True).splitlines()[-1]
               listing=subprocess.check_output(["riscv64-unknown-elf-objdump","-d","-M","no-aliases,numeric",str(elf)],text=True)
-              frames=[]
-              lines=listing.splitlines()
+              frames=[]; lines=listing.splitlines()
               for i,line in enumerate(lines):
                   m=re.search(r"<([^>]+)>:",line)
                   if not m: continue
-                  name2=m.group(1)
-                  frame=None
-                  for x in lines[i+1:i+9]:
-                      z=re.search(r"addi\s+x2,x2,(-?\d+)",x)
+                  name2=m.group(1); frame=None
+                  for x in lines[i+1:i+16]:
+                      z=re.search(r"addi\s+(?:x2|sp),(?:x2|sp),(-?\d+)",x)
                       if z:
                           v=int(z.group(1)); frame=-v if v<0 else None; break
                   if frame is not None: frames.append((name2,frame))
-              mainframe=next((v for k,v in frames if k=="main"),None)
-              print(f"\n{name}: {size}; main_frame={mainframe}; frames={frames}")
-              print("functions:", [x for x in frames if x[0] not in ("_start","_cstart","main")])
+              print(f"\n{name}: {size}; frames={frames}")
           PY
-      - name: Host correctness on baseline
+      - name: Host correctness
         working-directory: Task_3/Task_3A/code/c_programs
         run: bash test.sh
