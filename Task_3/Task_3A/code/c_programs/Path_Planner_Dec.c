@@ -283,7 +283,7 @@ static uint16_t select_edge(uint8_t k, uint16_t a, uint16_t b, uint16_t c, uint1
 }
 static uint16_t get_edge(uint8_t n, uint8_t k) {
     if (n == 0u || n > 36u) return 0;
-    if (n == 20u) return select_edge(k, 0x0155u, 0x02C8u, 0x02DBu, 0x0000u);
+    if (n == 20u) return select_edge(k, 0x0155u, 0x03C6u, 0x02C8u, 0x02DBu);
     if (n <= 18u) {
         if (n <= 9u) {
             if (n <= 5u) {
@@ -307,7 +307,7 @@ static uint16_t get_edge(uint8_t n, uint8_t k) {
             } else {
                 if (n <= 7u) {
                     if (n <= 6u) {
-                        return select_edge(k, 0x0143u, 0x03C1u, 0x0000u, 0x0000u);
+                        return select_edge(k, 0x0143u, 0x03C1u, 0x03D4u, 0x0000u);
                     } else {
                         return select_edge(k, 0x02C5u, 0x014Au, 0x02CFu, 0x0000u);
                     }
@@ -430,6 +430,7 @@ static uint16_t get_edge(uint8_t n, uint8_t k) {
 static uint8_t route_slot(uint8_t src, uint8_t dst) {
     uint32_t a, b, c, row;
     uint8_t i = (uint8_t)(dst - 1u);
+    if (src == 0u || src > 36u || dst == 0u || dst > 36u) return 0u;
         if (src <= 18u) {
             if (src <= 9u) {
                 if (src <= 5u) {
@@ -455,17 +456,17 @@ static uint8_t route_slot(uint8_t src, uint8_t dst) {
                             b = 0x69955555u;
                             c = 0x0000006Au;
                         } else {
-                            a = 0x95A69000u;
-                            b = 0xA6AAAAAAu;
+                            a = 0x-6A597000u;
+                            b = 0x-59555556u;
                             c = 0x00000019u;
                         }
                     }
                 } else {
                     if (src <= 7u) {
                         if (src <= 6u) {
-                            a = 0x55555145u;
-                            b = 0x55555555u;
-                            c = 0x00000055u;
+                            a = 0x-6A596EBBu;
+                            b = 0x-59555556u;
+                            c = 0x00000069u;
                         } else {
                             a = 0x2A040000u;
                             b = 0x28000000u;
@@ -473,8 +474,8 @@ static uint8_t route_slot(uint8_t src, uint8_t dst) {
                         }
                     } else {
                         if (src <= 8u) {
-                            a = 0x80510000u;
-                            b = 0xA2AAAA96u;
+                            a = 0x-7FAEF7E0u;
+                            b = 0x-5D55556Au;
                             c = 0x00000028u;
                         } else {
                             a = 0x00400000u;
@@ -546,9 +547,9 @@ static uint8_t route_slot(uint8_t src, uint8_t dst) {
                                 b = 0x55555541u;
                                 c = 0x00000055u;
                             } else {
-                                a = 0x95555555u;
-                                b = 0xA6AAA816u;
-                                c = 0x00000069u;
+                                a = 0x-15555966u;
+                                b = 0x-40003D5u;
+                                c = 0x000000BEu;
                             }
                         } else {
                             a = 0x00000000u;
@@ -562,7 +563,7 @@ static uint8_t route_slot(uint8_t src, uint8_t dst) {
                             c = 0x00000000u;
                         } else {
                             a = 0x2AAAAAAAu;
-                            b = 0xAAA986A8u;
+                            b = 0x-55567958u;
                             c = 0x000000AAu;
                         }
                     }
@@ -583,8 +584,8 @@ static uint8_t route_slot(uint8_t src, uint8_t dst) {
                             b = 0x55504154u;
                             c = 0x00000055u;
                         } else {
-                            a = 0x95555555u;
-                            b = 0xAA8A2956u;
+                            a = 0x-6AAAAAABu;
+                            b = 0x-5575D6AAu;
                             c = 0x0000006Au;
                         }
                     }
@@ -599,12 +600,12 @@ static uint8_t route_slot(uint8_t src, uint8_t dst) {
                                 c = 0x00000040u;
                             } else {
                                 a = 0x15555555u;
-                                b = 0xA8904154u;
+                                b = 0x-576FBEACu;
                                 c = 0x0000006Au;
                             }
                         } else {
-                            a = 0x95555555u;
-                            b = 0xA2AAA956u;
+                            a = 0x-6AAAAAABu;
+                            b = 0x-5D5556AAu;
                             c = 0x00000068u;
                         }
                     } else {
@@ -631,7 +632,7 @@ static uint8_t route_slot(uint8_t src, uint8_t dst) {
                         }
                     } else {
                         if (src <= 35u) {
-                            a = 0x40514000u;
+                            a = 0x40514410u;
                             b = 0x51555555u;
                             c = 0x00000004u;
                         } else {
@@ -648,11 +649,11 @@ static uint8_t route_slot(uint8_t src, uint8_t dst) {
     else row = c;
     return (uint8_t)((row >> ((i & 15u) << 1)) & 3u);
 }
-static uint8_t plan_path(uint8_t start, uint8_t end, uint8_t path[40]) {
+static uint8_t plan_path(uint8_t start, uint8_t end, uint8_t path[13]) {
     uint8_t cur = start, len = 1;
     if (start < 1u || start > 36u || end < 1u || end > 36u) return 0;
     path[0] = start;
-    while (cur != end && len < 36u) {
+    while (cur != end && len < 13u) {
         uint16_t e = get_edge(cur, route_slot(cur, end));
         if (!e) return 0;
         cur = (uint8_t)(e & 63u);
