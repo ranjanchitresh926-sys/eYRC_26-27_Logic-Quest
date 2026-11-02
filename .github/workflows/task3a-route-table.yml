@@ -214,7 +214,7 @@ jobs:
           }
           """
               start=s.index("static uint8_t plan_path(")
-              end=s.index("\\n// ##############################################",start)
+              end=s.index("\n// ##############################################",start)
               return s[:start]+helper+s[end:]
           def decrypt_split(s):
               old="""static void present_decrypt(uint32_t *hi, uint32_t *lo) {
