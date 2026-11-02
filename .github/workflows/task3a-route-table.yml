@@ -1,0 +1,262 @@
+name: Task 3A stateless routing experiment
+permissions:
+  contents: read
+on:
+  push:
+    branches:
+      - task-3a-solution
+    paths:
+      - ".github/workflows/task3a-route-table.yml"
+jobs:
+  route:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: task-3a-solution
+      - name: Generate exact all-pairs route code
+        working-directory: Task_3/Task_3A/code
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import heapq
+          p=Path("c_programs/Path_Planner_Dec.c")
+          src=p.read_text()
+          rows="""1:36/100 5/5 4/15 6/15
+          2:4/5
+          3:6/5
+          4:2/5 1/15 14/15
+          5:1/5 7/11 8/11
+          6:3/5 1/15
+          7:5/11 10/5 15/11
+          8:5/11 11/5 20/11
+          9:11/7 12/5
+          10:7/5
+          11:8/5 9/7 19/7
+          12:9/5
+          13:14/5 30/19
+          14:13/5 15/5 4/15
+          15:14/5 7/11
+          16:17/5 23/7
+          17:16/5
+          18:19/5
+          19:18/5 11/7
+          20:21/5 8/11 27/11
+          21:20/5
+          22:25/5
+          23:16/7 25/7 26/5
+          24:27/5
+          25:22/5 23/7
+          26:23/5 29/11
+          27:24/5 20/11 29/11
+          28:31/5 32/15
+          29:26/11 27/11 32/5
+          30:33/5 13/19 35/19
+          31:28/5 34/5 35/19
+          32:29/5 28/15
+          33:30/5
+          34:31/5
+          35:30/19 31/19
+          36:1/100"""
+          adj=[[] for _ in range(37)]
+          for line in rows.splitlines():
+              if not line.strip(): continue
+              a,b=line.strip().split(":"); u=int(a)
+              for z in b.split():
+                  v,w=map(int,z.split("/")); adj[u].append((v,w))
+          assert sum(map(len,adj))==74
+          for u in range(1,37):
+              for v,w in adj[u]:
+                  assert any(x==u and c==w for x,c in adj[v]),(u,v,w)
+          def shortest(s,t):
+              dist=[65535]*37; seen=[False]*37; dist[s]=0
+              for _ in range(36):
+                  best=65535; u=0
+                  for j in range(1,37):
+                      if not seen[j] and dist[j]<best:
+                          best=dist[j]; u=j
+                  if not u: break
+                  seen[u]=True
+                  if u==t: break
+                  for v,w in adj[u]:
+                      if not seen[v] and best+w<dist[v]:
+                          dist[v]=best+w
+              cur=t; rev=[cur]
+              while cur!=s and len(rev)<40:
+                  for v,w in adj[cur]:
+                      if dist[v]+w==dist[cur]:
+                          cur=v; rev.append(cur); break
+                  else: raise RuntimeError((s,t,cur,dist[cur]))
+              return list(reversed(rev)),dist[t]
+          slots=[[0]*37 for _ in range(37)]
+          for s in range(1,37):
+              for t in range(1,37):
+                  route,_=shortest(s,t)
+                  if len(route)>1:
+                      slots[s][t]=[v for v,w in adj[s]].index(route[1])
+          words=[]
+          for s in range(1,37):
+              row=[]
+              for wi in range(3):
+                  word=0
+                  for j in range(16):
+                      d=wi*16+j+1
+                      if d<=36: word|=(slots[s][d]&3)<<(2*j)
+                  row.append(word)
+              words.append(row)
+          def emit(lo,hi,level=2):
+              pad="    "*level
+              if lo==hi:
+                  a,b,c=words[lo-1]
+                  return f"{pad}a = 0x{a:08X}u;\\n{pad}b = 0x{b:08X}u;\\n{pad}c = 0x{c:08X}u;\\n"
+              mid=(lo+hi)//2
+              return f"{pad}if (src <= {mid}u) {{\\n"+emit(lo,mid,level+1)+f"{pad}}} else {{\\n"+emit(mid+1,hi,level+1)+f"{pad}}}\\n"
+          code="""static uint8_t route_slot(uint8_t src, uint8_t dst) {
+              uint32_t a, b, c, row;
+              uint8_t i = (uint8_t)(dst - 1u);
+          """+emit(1,36)+"""    if (i < 16u) row = a;
+              else if (i < 32u) row = b;
+              else row = c;
+              return (uint8_t)((row >> ((i & 15u) << 1)) & 3u);
+          }
+          static uint8_t plan_path(uint8_t start, uint8_t end, uint8_t path[40]) {
+              uint8_t cur = start, len = 1;
+              if (start < 1u || start > 36u || end < 1u || end > 36u) return 0;
+              path[0] = start;
+              while (cur != end && len < 36u) {
+                  uint16_t e = get_edge(cur, route_slot(cur, end));
+                  if (!e) return 0;
+                  cur = (uint8_t)(e & 63u);
+                  path[len++] = cur;
+              }
+              return cur == end ? len : 0;
+          }
+          """
+          guard="    if (n == 20u) return select_edge(k, 0x0155u, 0x02C8u, 0x02DBu, 0x0000u);\\n"
+          old="static uint16_t get_edge(uint8_t n, uint8_t k) {\\n    if (n == 0u || n > 36u) return 0;\\n"
+          if guard not in src:
+              assert old in src
+              src=src.replace(old,old+guard,1)
+          start=src.index("static uint8_t shortest_path(")
+          end=src.index("\\n// ##############################################",start)
+          src=src[:start]+code+src[end:]
+          dist="""#ifdef __linux__\\n    uint8_t dist[36];\\n#else\\n    uint8_t *dist = (uint8_t *)0x02000020u;\\n#endif\\n\\n"""
+          assert dist in src
+          src=src.replace(dist,"",1)
+          assert "idx = shortest_path(start_point, end_point, path_planned, dist);" in src
+          src=src.replace("idx = shortest_path(start_point, end_point, path_planned, dist);","idx = plan_path(start_point, end_point, path_planned);",1)
+          p.write_text(src)
+          # Independent table-route audit before the C compiler run.
+          for s in range(1,37):
+              for t in range(1,37):
+                  cur=s; route=[cur]
+                  for _ in range(36):
+                      if cur==t: break
+                      k=slots[cur][t]
+                      if k>=len(adj[cur]): raise RuntimeError(("bad slot",s,t,cur,k))
+                      cur=adj[cur][k][0]; route.append(cur)
+                  if cur!=t: raise RuntimeError(("cycle",s,t,route))
+                  expected,cost=shortest(s,t)
+                  actual=sum(next(w for v,w in adj[route[i-1]] if v==route[i]) for i in range(1,len(route)))
+                  if route!=expected or actual!=cost: raise RuntimeError(("path mismatch",s,t,route,expected,actual,cost))
+          print("Generated stateless route selector: 1,296 shortest paths verified; 37 undirected edges")
+          PY
+      - name: Official host tests
+        working-directory: Task_3/Task_3A/code/c_programs
+        run: |
+          set -euo pipefail
+          bash -n c_simulator.sh encrypt.sh test.sh generatehex.sh
+          bash test.sh
+          gcc -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer Path_Planner_Dec.c -o /tmp/plan-san
+          for args in "35 7 0" "3 36 0" "14 14 0" "7 E3399C2AAF0E5CA0 1" "26 12 0" "12 21020660468109D7 1" "22 D30E1799F911813A 1" "22 D01C53F5BFD076BA 1"; do
+            ASAN_OPTIONS=detect_leaks=1 /tmp/plan-san $args >/dev/null
+          done
+      - name: Exhaustive C route audit
+        working-directory: Task_3/Task_3A/code/c_programs
+        run: |
+          set -euo pipefail
+          cat > /tmp/route_audit.c <<'EOF'
+          #define main old_main
+          #include "Path_Planner_Dec.c"
+          #undef main
+          #include <stdio.h>
+          int main(void) {
+              uint16_t d[37][37];
+              for (uint8_t i=1;i<=36;i++) for (uint8_t j=1;j<=36;j++) d[i][j]=(i==j)?0:65535u;
+              for (uint8_t i=1;i<=36;i++) for (uint8_t k=0;k<4;k++) {
+                  uint16_t e=get_edge(i,k); if(e) d[i][e&63u]=(uint16_t)(e>>6);
+              }
+              for (uint8_t k=1;k<=36;k++) for (uint8_t i=1;i<=36;i++) for (uint8_t j=1;j<=36;j++)
+                  if ((uint32_t)d[i][k]+d[k][j]<d[i][j]) d[i][j]=(uint16_t)(d[i][k]+d[k][j]);
+              uint8_t path[40]; uint32_t pairs=0;
+              for (uint8_t s=1;s<=36;s++) for (uint8_t t=1;t<=36;t++) {
+                  uint8_t n=plan_path(s,t,path); if(!n || path[0]!=s || path[n-1]!=t) return 1;
+                  uint16_t cost=0;
+                  for(uint8_t i=1;i<n;i++) {
+                      uint8_t ok=0;
+                      for(uint8_t k=0;k<4;k++) {
+                          uint16_t e=get_edge(path[i-1],k);
+                          if(e&&(e&63u)==path[i]) {cost+=(uint8_t)(e>>6);ok=1;break;}
+                      }
+                      if(!ok) return 2;
+                  }
+                  if(cost!=d[s][t]) return 3;
+                  pairs++;
+              }
+              printf("PASS %u all-pairs shortest routes\\n",pairs);
+              return 0;
+          }
+          EOF
+          gcc -std=c11 -O2 -fsanitize=address,undefined /tmp/route_audit.c -o /tmp/route_audit
+          /tmp/route_audit
+      - name: Official RV32I build and memory checks
+        working-directory: Task_3/Task_3A/code/c_programs
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf picolibc-riscv64-unknown-elf
+          rm -f ../program.hex ../program.lss
+          bash generatehex.sh
+          test -s ../program.hex
+          test -s ../program.lss
+          riscv64-unknown-elf-size -B --common ../.temp.file.elf || true
+          riscv64-unknown-elf-objdump -h ../.temp.file.elf > /tmp/sections.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          rows=Path("../program.hex").read_text().splitlines()
+          assert rows[0].strip()=="@00000000" and len(rows)==257
+          words=[w for line in rows[1:] for w in line.split()]
+          assert len(words)==1024 and all(re.fullmatch(r"[0-9A-Fa-f]{8}",w) for w in words)
+          sections=Path("/tmp/sections.txt").read_text()
+          for name in (".rodata",".data",".sdata"):
+              for line in sections.splitlines():
+                  f=line.split()
+                  if len(f)>2 and f[1]==name: assert int(f[2],16)==0,(name,line)
+          listing=Path("../program.lss").read_text()
+          assert not re.search(r"\\b(mul|mulh|div|divu|rem|remu)\\b",listing)
+          print("PASS: 1024-word RV32I image; no initialized data tables")
+          PY
+      - name: Package candidate
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/release/lq_1137_task3a
+          cp -a Task_3/Task_3A/code /tmp/release/lq_1137_task3a/code
+          cp Task_3/Task_3A/code/c_programs/Path_Planner_Dec.c /tmp/Path_Planner_Dec_route.c
+          cd /tmp/release
+          zip -qr /tmp/lq_1137_task3a_route.zip lq_1137_task3a
+          zip -T /tmp/lq_1137_task3a_route.zip
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          z=ZipFile("/tmp/lq_1137_task3a_route.zip")
+          names=set(z.namelist())
+          assert len(names)==10
+          assert "lq_1137_task3a/code/program.hex" in names
+          assert "lq_1137_task3a/code/program.lss" in names
+          print("PASS: exact submission ZIP")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: task3a_route_table_candidate
+          path: /tmp/lq_1137_task3a_route.zip
