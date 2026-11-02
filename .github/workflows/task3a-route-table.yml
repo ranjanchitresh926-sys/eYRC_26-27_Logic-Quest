@@ -161,7 +161,7 @@ jobs:
           print("PASS: generated next-edge table for all 1,296 shortest routes")
           PY
 
-      - name: Profile separated computation
+      - name: Profile stack and host variants
         working-directory: Task_3/Task_3A/code/c_programs
         run: |
           set -euo pipefail
@@ -169,72 +169,54 @@ jobs:
           sudo apt-get install -y gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf picolibc-riscv64-unknown-elf
           python3 - <<'PY'
           from pathlib import Path
-          import subprocess,re
+          import subprocess
           p=Path("Path_Planner_Dec.c")
-          original=p.read_text()
-          start="// ############# Add your code here #############"
-          stop="// ##############################################"
-          a=original.index(start); b=original.index(stop,a+len(start))
-          c=original.index(start,b+len(stop)); d=original.index(stop,c+len(start))
-          helper="""
-          static uint8_t solve_task(uint8_t encrypted, uint8_t start, uint32_t hi, uint32_t lo,
-                                   volatile uint8_t *encp, volatile uint8_t *curp,
-                                   volatile uint8_t *nextp, uint8_t *msg, uint8_t *path) {
-              uint8_t end, done;
-              if (start < 1u || start > 36u) return 0;
-              if (encrypted) {
-                  present_decrypt(&hi, &lo);
-                  done = (uint8_t)(hi >> 24);
-                  msg[0] = (uint8_t)(hi >> 16);
-                  msg[1] = (uint8_t)(hi >> 8);
-                  msg[2] = (uint8_t)hi;
-                  msg[3] = (uint8_t)(lo >> 24);
-                  msg[4] = (uint8_t)(lo >> 16);
-                  end = (uint8_t)lo;
-                  if (done > 1u || end < 1u || end > 36u) return 0;
-                  if (!done) {
-                      uint8_t next = (uint8_t)(lo >> 8);
-                      if (next < 1u || next > 36u) return 0;
-                      *encp = 0;
-                      *curp = end;
-                      *nextp = next;
-                  }
-              } else {
-                  end = *nextp;
-                  if (end < 1u || end > 36u) return 0;
-              }
-              return plan_path(start, end, path);
+          base=p.read_text()
+          def route_indirect(s):
+              s=s.replace("    uint8_t cur = start, len = 1;","    uint8_t cur = start, len = 1;"+chr(10)+"    uint8_t (* volatile pick)(uint8_t,uint8_t) = route_slot;",1)
+              s=s.replace("get_edge(cur, route_slot(cur, end))","get_edge(cur, pick(cur, end))",1)
+              return s
+          def path_indirect(s):
+              old="idx = plan_path(start_point, end_point, path_planned);"
+              new=("uint8_t (* volatile plan_call)(uint8_t,uint8_t,uint8_t *) = plan_path;"+chr(10)+
+                   "    idx = plan_call(start_point, end_point, path_planned);")
+              assert old in s
+              return s.replace(old,new,1)
+          def decrypt_indirect(s):
+              old="present_decrypt(&block_hi, &block_lo);"
+              new=("void (* volatile dec_call)(uint32_t *,uint32_t *) = present_decrypt;"+chr(10)+
+                   "        dec_call(&block_hi, &block_lo);")
+              assert old in s
+              return s.replace(old,new,1)
+          variants={
+              "base":base,
+              "route_indirect":route_indirect(base),
+              "path_indirect":path_indirect(base),
+              "route_and_path":path_indirect(route_indirect(base)),
+              "route_and_dec":decrypt_indirect(route_indirect(base)),
+              "all_three":decrypt_indirect(path_indirect(route_indirect(base))),
           }
-          """
-          newbase=original[:b]+helper+original[b:c+len(start)]+"""
-              uint8_t (* volatile solve_call)(uint8_t,uint8_t,uint32_t,uint32_t,
-                  volatile uint8_t *,volatile uint8_t *,volatile uint8_t *,uint8_t *,uint8_t *) = solve_task;
-              idx = solve_call(is_encrypted, start_point, ENCRYPTED_HI, ENCRYPTED_LO,
-                  (volatile uint8_t *)&IS_ENCRYPTED, (volatile uint8_t *)&CURRENT_NODE,
-                  (volatile uint8_t *)&NEXT_NODE, message, path_planned);
-              if (!idx) return 1;
-          """+original[d:]
-          droot=Path("/tmp/split_profile"); droot.mkdir(exist_ok=True)
-          variants={"base":original,"split_task":newbase}
+          droot=Path("/tmp/stack_profile"); droot.mkdir(exist_ok=True)
           for name,src in variants.items():
               file=droot/(name+".c"); file.write_text(src)
+              host=subprocess.run(["bash","test.sh","-f",str(file)],text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+              if host.returncode: raise RuntimeError(name+" host tests failed: "+host.stdout)
               obj=droot/(name+".o"); elf=droot/(name+".elf")
               subprocess.run(["riscv64-unknown-elf-gcc","-march=rv32i","-mabi=ilp32","--specs=picolibc.specs","-Os","-g3","-flto","-DPICOLIBC_INTEGER_PRINTF_SCANF","-Wall","-c",str(file),"-o",str(obj)],check=True)
               subprocess.run(["riscv64-unknown-elf-gcc","-march=rv32i","-mabi=ilp32","--specs=picolibc.specs","-Os","-g3","-flto","-DPICOLIBC_INTEGER_PRINTF_SCANF","-Wl,--gc-sections,--defsym=__flash=0x00000000,--defsym=__flash_size=4096","--crt0=minimal","-Wl,--defsym=__ram=0x02000000,--defsym=__ram_size=512,--defsym=__stack_size=184","-Tpicolibc.ld","-o",str(elf),str(obj)],check=True)
               size=subprocess.check_output(["riscv64-unknown-elf-size","-B","--common",str(elf)],text=True).splitlines()[-1]
               dis=subprocess.check_output(["riscv64-unknown-elf-objdump","-d","-M","no-aliases,numeric",str(elf)],text=True)
-              frames=[]
+              out=[]
               lines=dis.splitlines()
               for i,line in enumerate(lines):
-                  m=re.search(r"<([^>]+)>:",line)
-                  if not m: continue
-                  fn=m.group(1); frame=None
-                  for zline in lines[i+1:i+20]:
-                      z=re.search(r"addi\\s+(?:x2|sp),(?:x2|sp),(-?\\d+)",zline)
-                      if z:
-                          v=int(z.group(1)); frame=-v if v<0 else None; break
-                  if frame is not None: frames.append((fn,frame))
-              print(name,size,"frames",frames)
+                  if any(line.endswith("<"+fn+">:") for fn in ("main","route_slot","plan_path","present_decrypt")):
+                      pro=[]
+                      for zline in lines[i+1:i+30]:
+                          if "addi" in zline and "x2,x2," in zline: pro.append(zline.strip())
+                          if len(pro)>=1: break
+                      out.append((line.strip(),pro))
+              print(name, "SIZE",size, "STACK",out)
+              print("HOST",host.stdout.splitlines()[-1])
           PY
       - name: Host and sanitizer tests
         working-directory: Task_3/Task_3A/code/c_programs
