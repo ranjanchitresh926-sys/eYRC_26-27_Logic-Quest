@@ -22,7 +22,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf picolibc-riscv64-unknown-elf
           bash generatehex.sh
-          cd ../../..
+          cd ../../../..
           git add -f Task_3/Task_3A/code/program.hex
           git -c user.name="Chitresh Ranjan" -c user.email="243762525+ranjanchitresh926-sys@users.noreply.github.com" commit -m "Refresh Task 3A image for corrected arena graph"
           git push origin task-3a-solution
