@@ -57,11 +57,11 @@ jobs:
           variant=variant.replace("static void key_prev(uint32_t *kh, uint32_t *km, uint16_t *kl, uint8_t r)","static void key_prev(volatile uint32_t *kh, volatile uint32_t *km, volatile uint16_t *kl, uint8_t r)")
           # Keep the decrypt, route selector, edge selector and path routine as separate frames.
           variant=variant.replace("        present_decrypt(&block_hi, &block_lo);",
-              "        void (* volatile dec_call)(uint32_t *,uint32_t *)=present_decrypt;\\n        dec_call(&block_hi, &block_lo);")
+              "        void (* volatile dec_call)(uint32_t *,uint32_t *)=present_decrypt;"+chr(10)+"        dec_call(&block_hi, &block_lo);")
           variant=variant.replace("    uint16_t e = get_edge(cur, route_slot(cur, end));",
-              "    uint8_t (* volatile pick)(uint8_t,uint8_t)=route_slot;\\n    uint16_t (* volatile edge)(uint8_t,uint8_t)=get_edge;\\n    uint16_t e = edge(cur, pick(cur, end));")
+              "    uint8_t (* volatile pick)(uint8_t,uint8_t)=route_slot;"+chr(10)+"    uint16_t (* volatile edge)(uint8_t,uint8_t)=get_edge;"+chr(10)+"    uint16_t e = edge(cur, pick(cur, end));")
           variant=variant.replace("idx = plan_path(start_point, end_point, path_planned);",
-              "uint8_t (* volatile plan_call)(uint8_t,uint8_t,uint8_t *)=plan_path;\\n    idx = plan_call(start_point, end_point, path_planned);")
+              "uint8_t (* volatile plan_call)(uint8_t,uint8_t,uint8_t *)=plan_path;"+chr(10)+"    idx = plan_call(start_point, end_point, path_planned);")
           variants={"base":base,"key_mem_round":variant}
           for name,src in variants.items():
               d=Path("/tmp/keyram")/name; d.mkdir(parents=True,exist_ok=True)
