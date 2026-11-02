@@ -483,7 +483,6 @@ int main(int argc, char const *argv[]) {
 
     idx = shortest_path(start_point, end_point, path_planned, dist);
     if (!idx) return 1;
-);
 
     // ##############################################
 
