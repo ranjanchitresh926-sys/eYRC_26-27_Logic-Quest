@@ -1,4 +1,6 @@
 name: Task 3A verification
+permissions:
+  contents: write
 on:
   push:
     branches:
@@ -30,6 +32,15 @@ jobs:
           test -s ../program.hex
           test -s ../program.lss
           wc -c ../program.hex ../program.lss
+      - name: Commit generated program.hex to Task 3A code folder
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f Task_3/Task_3A/code/program.hex
+          if ! git diff --cached --quiet; then
+            git commit -m "Add generated Task 3A RISC-V program.hex"
+            git push origin HEAD:task-3a-solution
+          fi
       - name: Upload generated Task 3A artifacts
         uses: actions/upload-artifact@v4
         with:
